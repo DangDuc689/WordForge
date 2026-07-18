@@ -8,3 +8,4 @@ coverage
 .wrangler
 .supabase
 public/catalog/**/.generation-progress.json
+Note/
