@@ -1,0 +1,7 @@
+project_id = "vocab-siege"
+
+[functions.ai-enrich-vocabulary]
+verify_jwt = true
+
+[functions.ai-generate-practice]
+verify_jwt = true

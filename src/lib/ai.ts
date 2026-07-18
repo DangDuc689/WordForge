@@ -1,0 +1,46 @@
+import { z } from 'zod'
+import type { AiPracticeSet, AiVocabularyDraft } from '../domain/types'
+import { supabase } from './supabase'
+
+const vocabularyDraftSchema = z.object({
+  english: z.string().min(1),
+  vietnamese: z.string().min(1),
+  acceptedAnswers: z.array(z.string()).default([]),
+  partOfSpeech: z.enum(['noun', 'verb', 'adjective', 'phrase', 'adverb', 'other']),
+  tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  cefr: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', '']),
+  ipa: z.string().default(''),
+  exampleEn: z.string().default(''),
+  exampleVi: z.string().default(''),
+  notes: z.string().default(''),
+})
+
+const practiceSetSchema = z.object({
+  title: z.string().min(1),
+  format: z.enum(['reading', 'quiz']),
+  passage: z.string().default(''),
+  passageVi: z.string().default(''),
+  questions: z.array(z.object({
+    id: z.string(),
+    vocabularyId: z.string().nullable(),
+    prompt: z.string(),
+    choices: z.array(z.string()).min(2),
+    answer: z.string(),
+    explanation: z.string(),
+  })).min(1),
+})
+
+async function invoke<T>(functionName: string, body: Record<string, unknown>, schema: z.ZodTypeAny): Promise<T> {
+  if (!supabase) throw new Error('AI cần Supabase được cấu hình. Bạn vẫn có thể nhập và học thủ công.')
+  const { data, error } = await supabase.functions.invoke(functionName, { body })
+  if (error) throw new Error(error.message || 'AI hiện không phản hồi.')
+  const parsed = schema.safeParse(data)
+  if (!parsed.success) throw new Error('AI trả về dữ liệu không hợp lệ. Vui lòng thử lại.')
+  return parsed.data as T
+}
+
+export const enrichVocabulary = (term: string, deckId: string): Promise<AiVocabularyDraft> =>
+  invoke('ai-enrich-vocabulary', { term, deckId }, vocabularyDraftSchema)
+
+export const generatePractice = (deckId: string | null, format: 'reading' | 'quiz'): Promise<AiPracticeSet> =>
+  invoke('ai-generate-practice', { deckId, format }, practiceSetSchema)
