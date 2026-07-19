@@ -30,10 +30,17 @@ const Stats = ({ total, learn, review }: { total: number; learn: number; review:
 )
 
 export function NewStudyPage() {
-  const { snapshot, reviewWord } = useApp()
-  const [deck, setDeck] = useState('all')
+  const {
+    snapshot,
+    learnSession,
+    savingSession,
+    changeLearnDeck,
+    deferLearnWord,
+    nextLearnWord,
+    generateNextBatchAction
+  } = useApp()
+
   const [tab, setTab] = useState<Tab>('flashcard')
-  const [idx, setIdx] = useState(0)
   
   const [answer, setAnswer] = useState('')
   const [choice, setChoice] = useState('')
@@ -42,20 +49,26 @@ export function NewStudyPage() {
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
+  const [showVi, setShowVi] = useState(false)
   const started = useRef(Date.now())
 
-  const available = useMemo(() => 
-    snapshot.vocabulary.filter(w => w.status === 'active' && (deck === 'all' || w.deckId === deck) && !snapshot.cards.some(c => c.vocabularyId === w.id)), 
-    [deck, snapshot.cards, snapshot.vocabulary]
-  )
-  
-  const [ids, setIds] = useState<string[]>([])
+  // Automatically generate next batch if status is idle and queue is empty
   useEffect(() => {
-    setIds(p => p.length && p.some(id => available.some(w => w.id === id)) ? p : available.slice(0, snapshot.profile.newWordsPerSession).map(w => w.id))
-  }, [available, snapshot.profile.newWordsPerSession])
-  
-  const queue = useMemo(() => ids.map(id => snapshot.vocabulary.find(w => w.id === id)).filter((w): w is VocabularyItem => !!w), [ids, snapshot.vocabulary])
-  const word = queue[idx]
+    if (learnSession && learnSession.status === 'idle' && learnSession.queueIds.length === 0 && !savingSession) {
+      void generateNextBatchAction()
+    }
+  }, [learnSession?.status, learnSession?.queueIds.length, savingSession, generateNextBatchAction])
+
+  const deck = learnSession?.selectedDeckId || 'all'
+
+  const queue = useMemo(() => {
+    if (!learnSession) return []
+    return learnSession.queueIds
+      .map(id => snapshot.vocabulary.find(w => w.id === id))
+      .filter((w): w is VocabularyItem => !!w)
+  }, [learnSession?.queueIds, snapshot.vocabulary])
+
+  const word = queue[0]
 
   const choices = useMemo(() => {
     if (!word) return []
@@ -75,24 +88,32 @@ export function NewStudyPage() {
     setCorrect(false)
     setHint(false)
     setIsFlipped(false)
+    setShowVi(false)
     if (tab === 'flashcard') {
       started.current = Date.now()
     }
   }, [word?.id, tab])
 
   const nextWord = async (ok = correct, submitted = answer) => {
-    if (!word || busy) return
+    if (!word || busy || savingSession) return
     setBusy(true)
-    await reviewWord({
+    await nextLearnWord({
       vocabularyId: word.id,
-      mode: 'learn',
       correct: ok,
       submittedAnswer: submitted,
       responseMs: Date.now() - started.current,
       usedHint: hint
     })
     setBusy(false)
-    setIdx(i => i + 1)
+    setTab('flashcard')
+  }
+
+  const skipWord = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    if (!word || busy || savingSession) return
+    setBusy(true)
+    await deferLearnWord(word.id)
+    setBusy(false)
     setTab('flashcard')
   }
 
@@ -137,18 +158,33 @@ export function NewStudyPage() {
     }
   }
   
-  const total = snapshot.vocabulary.filter(w => w.status === 'active').length
-  const learnedCount = snapshot.vocabulary.filter(w => w.status === 'active' && snapshot.cards.some(c => c.vocabularyId === w.id)).length
+  const total = snapshot.vocabulary.filter(w => w.status === 'active' && (deck === 'all' || w.deckId === deck)).length
+  const learnedCount = snapshot.vocabulary.filter(w => w.status === 'active' && (deck === 'all' || w.deckId === deck) && snapshot.cards.some(c => c.vocabularyId === w.id)).length
+  const reviewCount = snapshot.cards.filter(c => {
+    if (!isDue(c)) return false
+    const vocab = snapshot.vocabulary.find(w => w.id === c.vocabularyId)
+    if (!vocab || vocab.status !== 'active') return false
+    return deck === 'all' || vocab.deckId === deck
+  }).length
 
   if (!word) {
     return (
       <div className="page learn-page">
-        <Stats total={total} learn={learnedCount} review={snapshot.cards.filter(c => isDue(c)).length} />
+        <Stats total={total} learn={learnedCount} review={reviewCount} />
         <section className="learn-empty panel">
           <div>✓</div>
           <h2>Hoàn thành lượt học!</h2>
           <p>Bạn đã xử lý toàn bộ từ mới trong lượt này.</p>
-          <Link className="button primary" to="/">Về tổng quan</Link>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+            <button 
+              className="button primary" 
+              disabled={busy || savingSession} 
+              onClick={() => void generateNextBatchAction()}
+            >
+              Học tiếp
+            </button>
+            <Link className="button ghost" to="/">Về tổng quan</Link>
+          </div>
         </section>
       </div>
     )
@@ -159,7 +195,7 @@ export function NewStudyPage() {
 
   return (
     <div className="page learn-page">
-      <Stats total={total} learn={learnedCount} review={snapshot.cards.filter(c => isDue(c)).length} />
+      <Stats total={total} learn={learnedCount} review={reviewCount} />
       
       <div className="learn-toolbar">
         <div className="learn-tabs" role="tablist">
@@ -175,7 +211,11 @@ export function NewStudyPage() {
             </button>
           ))}
         </div>
-        <select value={deck} onChange={e => { setDeck(e.target.value); setIdx(0); setIds([]) }}>
+        <select 
+          value={deck} 
+          disabled={busy || savingSession}
+          onChange={e => { void changeLearnDeck(e.target.value === 'all' ? null : e.target.value) }}
+        >
           <option value="all">Tất cả bộ từ</option>
           {snapshot.decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
@@ -184,7 +224,7 @@ export function NewStudyPage() {
       {tab === 'flashcard' && (
         <section 
           className={`learn-card flashcard-learn ${isFlipped ? 'flipped' : ''}`}
-          onClick={() => setIsFlipped(!isFlipped)}
+          onClick={() => !busy && !savingSession && setIsFlipped(!isFlipped)}
           style={{ cursor: 'pointer', userSelect: 'none' }}
         >
           <span className="new-badge">✨ Từ mới</span>
@@ -192,7 +232,7 @@ export function NewStudyPage() {
           <div className="learn-word">
             {!isFlipped ? (
               <>
-                <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" onClick={(e) => { e.stopPropagation(); speak(word); }}>◖</button></h1>
+                <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" disabled={busy || savingSession} onClick={(e) => { e.stopPropagation(); speak(word); }}>◖</button></h1>
                 <p>{ipa}</p>
                 <div style={{ marginTop: '20px', color: 'var(--faint)', fontSize: '0.9rem', fontWeight: 500 }}>Chạm để lật thẻ</div>
               </>
@@ -205,8 +245,9 @@ export function NewStudyPage() {
           </div>
 
           <div className="learn-card-actions" onClick={e => e.stopPropagation()}>
-            <button className="mastered-button" disabled={busy} onClick={() => void nextWord(true, '')}>Mastered</button>
-            <button className="next-button" disabled={busy} onClick={() => handleNextTab()}>Next&nbsp; →</button>
+            <button className="button ghost" disabled={busy || savingSession} onClick={skipWord}>Để sau</button>
+            <button className="mastered-button" disabled={busy || savingSession} onClick={() => void nextWord(true, '')}>Mastered</button>
+            <button className="next-button" disabled={busy || savingSession} onClick={() => handleNextTab()}>Next&nbsp; →</button>
           </div>
         </section>
       )}
@@ -214,14 +255,14 @@ export function NewStudyPage() {
       {tab === 'meaning' && (
         <section className="learn-card meaning-learn">
           <div className="question-heading">🧠 &nbsp;WHAT DOES THIS MEAN?</div>
-          <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" onClick={() => speak(word)}>◖</button></h1>
+          <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" disabled={busy || savingSession} onClick={() => speak(word)}>◖</button></h1>
           
           <div className="meaning-choices">
             {choices.map(c => (
               <button 
                 key={c} 
                 className={`${choice === c ? 'selected ' : ''}${checked && c === word.vietnamese ? 'answer-correct ' : ''}${checked && choice === c && c !== word.vietnamese ? 'answer-wrong' : ''}`} 
-                disabled={checked} 
+                disabled={checked || busy || savingSession} 
                 onClick={() => setChoice(c)}
               >
                 <span />{c}
@@ -230,11 +271,11 @@ export function NewStudyPage() {
           </div>
 
           {!checked ? (
-            <button className="learn-check" disabled={!choice} onClick={checkMeaning}>Check</button>
+            <button className="learn-check" disabled={!choice || busy || savingSession} onClick={checkMeaning}>Check</button>
           ) : (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
               {correct ? 'Chính xác! 🎉' : 'Chưa chính xác, hãy chọn lại nhé.'}
-              <button onClick={() => correct ? handleNextTab() : (setChecked(false), setChoice(''))}>
+              <button disabled={busy || savingSession} onClick={() => correct ? handleNextTab() : (setChecked(false), setChoice(''))}>
                 {correct ? 'Next →' : 'Thử lại'}
               </button>
             </div>
@@ -255,17 +296,17 @@ export function NewStudyPage() {
               placeholder="Nhập từ tiếng Anh…" 
               autoComplete="off" 
               spellCheck={false}
-              disabled={checked}
+              disabled={checked || busy || savingSession}
             />
-            <button type="button" className="hint-button" onClick={() => { setHint(true); setAnswer(word.english) }}>💡</button>
-            <button type="button" className="mic-button" onClick={() => speak(word)}>♩</button>
-            <button className="learn-check" disabled={!answer.trim() || checked}>Check</button>
+            <button type="button" className="hint-button" disabled={busy || savingSession || checked} onClick={() => { setHint(true); setAnswer(word.english) }}>💡</button>
+            <button type="button" className="mic-button" disabled={busy || savingSession} onClick={() => speak(word)}>♩</button>
+            <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession}>Check</button>
           </form>
 
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
               {correct ? 'Chính xác! 🎉' : 'Chưa chính xác, hãy nhập lại nhé.'}
-              <button onClick={() => correct ? handleNextTab() : setChecked(false)}>
+              <button disabled={busy || savingSession} onClick={() => correct ? handleNextTab() : setChecked(false)}>
                 {correct ? 'Next →' : 'Thử lại'}
               </button>
             </div>
@@ -276,14 +317,19 @@ export function NewStudyPage() {
       {tab === 'example' && (
         <section className="learn-card example-learn">
           <div className="question-heading">📝 &nbsp;MAKE A SENTENCE WITH THIS WORD</div>
-          <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" onClick={() => speak(word)}>◖</button></h1>
+          <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" disabled={busy || savingSession} onClick={() => speak(word)}>◖</button></h1>
           
           <div className="example-meaning">{word.vietnamese} <span>{ipa}</span></div>
           
-          <div className="example-hint">
-            <b>📖 Gợi ý</b>
+          <div 
+            className="example-hint" 
+            onClick={() => !busy && !savingSession && word.exampleVi && setShowVi(v => !v)}
+            style={word.exampleVi ? { cursor: 'pointer' } : undefined}
+          >
+            <b>📖 Gợi ý {word.exampleVi && <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--faint)', marginLeft: '0.5rem' }}>(Chạm để xem nghĩa)</span>}</b>
             <p>{example}</p>
-            <button type="button" onClick={() => speak(word)}>◖</button>
+            {showVi && word.exampleVi && <p style={{ color: 'var(--faint)', fontSize: '0.9rem', marginTop: '0.5rem' }}>{word.exampleVi}</p>}
+            <button type="button" disabled={busy || savingSession} onClick={(e) => { e.stopPropagation(); speak(word); }}>◖</button>
           </div>
 
           <form onSubmit={checkExample}>
@@ -291,19 +337,19 @@ export function NewStudyPage() {
               value={answer} 
               onChange={e => setAnswer(e.target.value)} 
               placeholder="Write an English sentence (AI graded) or copy the example above…"
-              disabled={checked}
+              disabled={checked || busy || savingSession}
             />
             
             <div className="example-actions">
-              <button type="button" className="ai-grade" disabled={!answer.trim() || checked} onClick={() => checkExample({ preventDefault: () => {} } as FormEvent)}>🤖 Grade with AI</button>
-              <button className="learn-check" disabled={!answer.trim() || checked}>Check</button>
+              <button type="button" className="ai-grade" disabled={!answer.trim() || checked || busy || savingSession} onClick={() => checkExample({ preventDefault: () => {} } as FormEvent)}>🤖 Grade with AI</button>
+              <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession}>Check</button>
             </div>
           </form>
 
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
               {correct ? 'Câu trả lời tốt! 🎉' : 'Hãy thử dùng đúng từ vựng trong câu.'}
-              <button onClick={() => correct ? void nextWord(true) : setChecked(false)}>
+              <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : setChecked(false)}>
                 {correct ? 'Hoàn thành →' : 'Thử lại'}
               </button>
             </div>

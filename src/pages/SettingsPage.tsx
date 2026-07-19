@@ -44,9 +44,9 @@ export function SettingsPage() {
         <label>Múi giờ <select value={snapshot.profile.timezone} onChange={(event) => void updateProfile({ timezone: event.target.value })}><option value="Asia/Saigon">Asia/Saigon (UTC+7)</option><option value="UTC">UTC</option></select></label>
       </section>
 
-      <section className="panel settings-section"><div className="section-title"><span><b>AI Practice</b><small>Gemini chỉ nhận phần dữ liệu học cần thiết</small></span></div>
+      <section className="panel settings-section"><div className="section-title"><span><b>AI Practice</b><small>Groq chỉ nhận phần dữ liệu học cần thiết</small></span></div>
         <label className="toggle-row"><span><b>Bật tính năng AI</b><small>AI luôn tạo bản nháp, không tự lưu từ.</small></span><input type="checkbox" checked={snapshot.profile.aiEnabled} onChange={(event) => void updateProfile({ aiEnabled: event.target.checked })} /></label>
-        <div className="privacy-note">Gemini Free Tier có thể dùng nội dung request để cải thiện sản phẩm. Không gửi email hoặc dữ liệu nhận dạng; chỉ gửi từ mục tiêu và tối đa 80 từ đã biết.</div>
+        <div className="privacy-note">Groq API sẽ nhận nội dung request để tạo phản hồi. Không gửi email hoặc dữ liệu nhận dạng; chỉ gửi từ mục tiêu và tối đa 80 từ đã biết.</div>
       </section>
       <section className="panel settings-section"><div className="section-title"><span><b>Backup dữ liệu</b><small>Supabase Free không có automatic backup</small></span></div>
         <p>Xuất toàn bộ bộ từ, lộ trình 6 cấp nhớ, game run và AI practice thành một file JSON.</p>

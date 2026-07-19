@@ -1,14 +1,30 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "pending-generation",
+  "catalogVersion": "oxford-3000-us-v1",
   "variant": "en-US",
   "sourceUrl": "https://www.oxfordlearnersdictionaries.com/external/pdf/wordlists/oxford-3000-5000/American_Oxford_3000_by_CEFR_level.pdf",
-  "ready": false,
-  "message": "Pipeline đã sẵn sàng nhưng catalog đầy đủ chưa được sinh vì GEMINI_API_KEY chưa được cấu hình.",
+  "ready": true,
+  "message": "",
   "levels": [
-    { "level": "A1", "entryCount": 0, "file": "a1.json" },
-    { "level": "A2", "entryCount": 0, "file": "a2.json" },
-    { "level": "B1", "entryCount": 0, "file": "b1.json" },
-    { "level": "B2", "entryCount": 0, "file": "b2.json" }
+    {
+      "level": "A1",
+      "entryCount": 1077,
+      "file": "a1.json"
+    },
+    {
+      "level": "A2",
+      "entryCount": 989,
+      "file": "a2.json"
+    },
+    {
+      "level": "B1",
+      "entryCount": 903,
+      "file": "b1.json"
+    },
+    {
+      "level": "B2",
+      "entryCount": 839,
+      "file": "b2.json"
+    }
   ]
 }

@@ -1,4 +1,4 @@
-import { callGemini, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
+import { callGroq, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
 
 const schema = {
   type: 'OBJECT', properties: {
@@ -20,7 +20,7 @@ Deno.serve(async (request) => {
     const knownIds = new Set((cards ?? []).filter((card) => card.reps >= 2 && card.memory_level >= 2).map((card) => card.vocabulary_id))
     const known = (words ?? []).filter((word) => knownIds.has(word.id)).slice(0, 80)
     const prompt = `Bạn là trợ lý học tiếng Anh cho người Việt trình độ A1-B1. Tạo bản nháp cho từ/cụm từ mới: "${term.trim()}". Chỉ dùng danh sách từ người học đã biết bên dưới để viết ví dụ đơn giản; không suy đoán trình độ tổng quát. Trả JSON đúng schema, tiếng Việt tự nhiên, tier 1-3 và CEFR chỉ là nhãn tham khảo. acceptedAnswers chỉ thêm biến thể chính tả/ngữ pháp thật sự tương đương, không thêm từ đồng nghĩa. Từ đã biết: ${JSON.stringify(known.map((word) => `${word.english}=${word.vietnamese}`))}`
-    const draft = await callGemini(prompt, schema)
+    const draft = await callGroq(prompt, schema)
     return json({ ...draft, english: term.trim(), tier: Math.min(3, Math.max(1, Number(draft.tier) || 1)), acceptedAnswers: Array.isArray(draft.acceptedAnswers) ? draft.acceptedAnswers.slice(0, 5) : [] })
   } catch (error) { return json({ error: error instanceof Error ? error.message : 'AI enrichment thất bại.' }, 500) }
 })

@@ -5,6 +5,7 @@ import type {
   Deck,
   GameOutcome,
   GameRun,
+  LearnSession,
   VocabularyImportResult,
   PracticeSession,
   Profile,
@@ -15,6 +16,7 @@ import { CloudRepository, LocalRepository, type AppRepository } from '../data/re
 import { loadOxfordCatalog, type OxfordLevel } from '../data/oxfordCatalog'
 import { STARTER_WORDS } from '../data/starterWords'
 import { aggregateGameOutcomes, buildDashboardStats, createSrsCard, isDue, memoryLevelInfo, ratingFromGameOutcome, scheduleReview } from '../lib/srs'
+import { sanitizeLearnSession, generateNextBatch } from '../lib/learn'
 import { useAuth } from './AuthContext'
 
 interface ReviewInput {
@@ -40,11 +42,18 @@ interface AppValue {
   reviewWord: (input: ReviewInput) => Promise<void>
   recordGame: (run: Omit<GameRun, 'id' | 'userId' | 'createdAt'>, outcomes: GameOutcome[]) => Promise<void>
   updateProfile: (input: Partial<Pick<Profile, 'newWordsPerSession' | 'desiredRetention' | 'aiEnabled' | 'timezone'>>) => Promise<void>
-  savePractice: (deckId: string | null, format: 'reading' | 'quiz', targetIds: string[], content: AiPracticeSet, score?: number | null) => Promise<void>
+  savePractice: (deckId: string | null, format: 'reading' | 'quiz' | 'dialogue', targetIds: string[], content: AiPracticeSet, score?: number | null) => Promise<PracticeSession>
+  updatePracticeSession: (session: PracticeSession) => Promise<void>
   exportBackup: () => void
   importBackup: (file: File) => Promise<void>
   reload: () => Promise<void>
   adjustMemoryLevel: (vocabularyId: string, action: 'decrement' | 'reset-to-one') => Promise<void>
+  learnSession: LearnSession | null
+  savingSession: boolean
+  changeLearnDeck: (deckId: string | null) => Promise<void>
+  deferLearnWord: (vocabularyId: string) => Promise<void>
+  nextLearnWord: (input: Omit<ReviewInput, 'mode'>) => Promise<void>
+  generateNextBatchAction: () => Promise<void>
 }
 
 const AppContext = createContext<AppValue | null>(null)
@@ -107,6 +116,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { userId, isLocalMode } = useAuth()
   const repository = useMemo<AppRepository>(() => isLocalMode ? new LocalRepository() : new CloudRepository(), [isLocalMode])
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null)
+  const [learnSession, setLearnSession] = useState<LearnSession | null>(null)
+  const [savingSession, setSavingSession] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -120,6 +131,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await repository.restore(loaded)
       }
       setSnapshot(loaded)
+
+      let session = await repository.loadLearnSession(userId)
+      if (!session) {
+        session = {
+          userId,
+          selectedDeckId: null,
+          queueIds: [],
+          deferredIds: [],
+          status: 'idle',
+          updatedAt: new Date().toISOString()
+        }
+      }
+      const sanitized = sanitizeLearnSession(session, loaded)
+      setLearnSession(sanitized)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể tải dữ liệu.')
     } finally {
@@ -128,6 +153,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [repository, userId])
 
   useEffect(() => { void reload() }, [reload])
+
+  const saveAndSetSession = useCallback(async (newSession: LearnSession) => {
+    setSavingSession(true)
+    try {
+      await repository.saveLearnSession(newSession)
+      setLearnSession(newSession)
+    } catch (err) {
+      console.error('Lỗi khi lưu phiên học:', err)
+    } finally {
+      setSavingSession(false)
+    }
+  }, [repository])
+
+  useEffect(() => {
+    if (snapshot && learnSession && !savingSession) {
+      const sanitized = sanitizeLearnSession(learnSession, snapshot)
+      if (
+        sanitized.selectedDeckId !== learnSession.selectedDeckId ||
+        sanitized.queueIds.length !== learnSession.queueIds.length ||
+        sanitized.deferredIds.length !== learnSession.deferredIds.length ||
+        sanitized.queueIds.some((id, idx) => id !== learnSession.queueIds[idx]) ||
+        sanitized.deferredIds.some((id, idx) => id !== learnSession.deferredIds[idx])
+      ) {
+        void saveAndSetSession(sanitized)
+      }
+    }
+  }, [snapshot, learnSession, savingSession, saveAndSetSession])
 
   const requireSnapshot = () => {
     if (!snapshot) throw new Error('Dữ liệu chưa sẵn sàng')
@@ -308,7 +360,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           content, score, createdAt: nowIso(),
         }
         await repository.savePracticeSession(session)
-        setSnapshot((state) => state ? ({ ...state, practiceSessions: [session, ...state.practiceSessions] }) : state)
+        setSnapshot((state) => state ? ({ ...state, practiceSessions: [session, ...state.practiceSessions].slice(0, 200) }) : state)
+        return session
+      },
+      async updatePracticeSession(session) {
+        await repository.savePracticeSession(session)
+        setSnapshot((state) => state ? ({ ...state, practiceSessions: state.practiceSessions.map(s => s.id === session.id ? session : s) }) : state)
       },
       exportBackup() {
         const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
@@ -367,11 +424,92 @@ export function AppProvider({ children }: { children: ReactNode }) {
           cards: state.cards.map((item) => item.id === updatedCard.id ? updatedCard : item),
         }) : state)
       },
+      learnSession,
+      savingSession,
+      async changeLearnDeck(deckId) {
+        if (savingSession || !learnSession || !snapshot) return
+        const updatedSession = sanitizeLearnSession({
+          ...learnSession,
+          selectedDeckId: deckId,
+          queueIds: [],
+          status: 'idle',
+          updatedAt: new Date().toISOString()
+        }, snapshot)
+
+        const nextSession = generateNextBatch(updatedSession, snapshot, snapshot.profile.newWordsPerSession)
+        await saveAndSetSession(nextSession)
+      },
+      async deferLearnWord(vocabularyId) {
+        if (savingSession || !learnSession || !snapshot) return
+        const nextQueue = learnSession.queueIds.filter(id => id !== vocabularyId)
+        const nextDeferred = [...learnSession.deferredIds]
+        if (!nextDeferred.includes(vocabularyId)) {
+          nextDeferred.push(vocabularyId)
+        }
+        const updatedSession = sanitizeLearnSession({
+          ...learnSession,
+          queueIds: nextQueue,
+          deferredIds: nextDeferred,
+          status: nextQueue.length > 0 ? 'active' : 'idle',
+          updatedAt: new Date().toISOString()
+        }, snapshot)
+
+        await saveAndSetSession(updatedSession)
+      },
+      async nextLearnWord(input) {
+        if (savingSession || !learnSession || !snapshot) return
+        const current = snapshot
+        const existing = current.cards.find((item) => item.vocabularyId === input.vocabularyId)
+        const card = existing ?? createSrsCard(userId, input.vocabularyId)
+        const result = scheduleReview({
+          card,
+          mode: 'learn',
+          correct: input.correct,
+          submittedAnswer: input.submittedAnswer,
+          responseMs: input.responseMs,
+          usedHint: input.usedHint,
+        })
+
+        await Promise.all([
+          repository.saveCard(result.card),
+          repository.addReview(result.event)
+        ])
+
+        setSnapshot((state) => state ? ({
+          ...state,
+          cards: state.cards.some((item) => item.id === result.card.id) ? state.cards.map((item) => item.id === result.card.id ? result.card : item) : [result.card, ...state.cards],
+          reviews: [result.event, ...state.reviews],
+        }) : state)
+
+        const nextQueue = learnSession.queueIds.filter(id => id !== input.vocabularyId)
+        const nextStatus = nextQueue.length > 0 ? 'active' : 'completed'
+
+        const tempSnapshot: AppSnapshot = {
+          ...current,
+          cards: current.cards.some((item) => item.id === result.card.id)
+            ? current.cards.map((item) => item.id === result.card.id ? result.card : item)
+            : [result.card, ...current.cards]
+        }
+
+        const updatedSession = sanitizeLearnSession({
+          ...learnSession,
+          queueIds: nextQueue,
+          status: nextStatus,
+          updatedAt: new Date().toISOString()
+        }, tempSnapshot)
+
+        await saveAndSetSession(updatedSession)
+      },
+      async generateNextBatchAction() {
+        if (savingSession || !learnSession || !snapshot) return
+        const nextSession = generateNextBatch(learnSession, snapshot, snapshot.profile.newWordsPerSession)
+        await saveAndSetSession(nextSession)
+      },
       reload,
     }
-  }, [error, loading, reload, repository, snapshot, userId])
+  }, [error, loading, reload, repository, snapshot, userId, learnSession, savingSession, saveAndSetSession])
 
-  if (!snapshot) {
+  if (!snapshot || !learnSession) {
     return <div className="boot-screen">{loading ? 'Đang dựng thành trì từ vựng…' : <><p>{error || 'Không có dữ liệu.'}</p><button onClick={() => void reload()}>Thử lại</button></>}</div>
   }
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

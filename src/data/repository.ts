@@ -2,6 +2,7 @@ import type {
   AppSnapshot,
   Deck,
   GameRun,
+  LearnSession,
   PracticeSession,
   Profile,
   ReviewEvent,
@@ -23,6 +24,8 @@ export interface AppRepository {
   addGameRun(run: GameRun): Promise<void>
   savePracticeSession(session: PracticeSession): Promise<void>
   restore(snapshot: AppSnapshot): Promise<void>
+  loadLearnSession(userId: string): Promise<LearnSession | null>
+  saveLearnSession(session: LearnSession): Promise<void>
 }
 
 const STORAGE_KEY = 'vocab-siege.snapshot.v1'
@@ -74,9 +77,21 @@ export class LocalRepository implements AppRepository {
   async addReview(event: ReviewEvent) { this.update((snapshot) => ({ ...snapshot, reviews: [event, ...snapshot.reviews].slice(0, 5_000) })) }
   async addGameRun(run: GameRun) { this.update((snapshot) => ({ ...snapshot, gameRuns: [run, ...snapshot.gameRuns].slice(0, 500) })) }
   async savePracticeSession(session: PracticeSession) {
-    this.update((snapshot) => ({ ...snapshot, practiceSessions: upsert(snapshot.practiceSessions, session).slice(-200) }))
+    this.update((snapshot) => ({ ...snapshot, practiceSessions: upsert(snapshot.practiceSessions, session).slice(0, 200) }))
   }
   async restore(snapshot: AppSnapshot) { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)) }
+  async loadLearnSession(userId: string): Promise<LearnSession | null> {
+    const raw = localStorage.getItem(`vocab-siege.learn-session.v1.${userId}`)
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as LearnSession
+    } catch {
+      return null
+    }
+  }
+  async saveLearnSession(session: LearnSession) {
+    localStorage.setItem(`vocab-siege.learn-session.v1.${session.userId}`, JSON.stringify(session))
+  }
 }
 
 function upsert<T extends { id: string }>(items: T[], item: T): T[] {
@@ -222,5 +237,23 @@ export class CloudRepository implements AppRepository {
     await Promise.all(snapshot.reviews.map((item) => this.addReview(item)))
     await Promise.all(snapshot.gameRuns.map((item) => this.addGameRun(item)))
     await Promise.all(snapshot.practiceSessions.map((item) => this.savePracticeSession(item)))
+  }
+  async loadLearnSession(userId: string): Promise<LearnSession | null> {
+    if (!supabase) throw new Error('Supabase chưa được cấu hình')
+    const { data, error } = await supabase
+      .from('learn_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return toCamel(data) as unknown as LearnSession
+  }
+  async saveLearnSession(session: LearnSession) {
+    if (!supabase) throw new Error('Supabase chưa được cấu hình')
+    const { error } = await supabase
+      .from('learn_sessions')
+      .upsert(toSnake(session as unknown as Record<string, unknown>))
+    if (error) throw error
   }
 }

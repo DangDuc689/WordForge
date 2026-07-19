@@ -128,10 +128,12 @@ export interface PracticeSession {
   id: string
   userId: string
   deckId: string | null
-  format: 'reading' | 'quiz'
+  format: 'reading' | 'quiz' | 'dialogue'
   targetVocabularyIds: string[]
   content: AiPracticeSet
   score: number | null
+  answers?: Record<string, string>
+  completedAt?: string
   createdAt: string
 }
 
@@ -159,10 +161,11 @@ export interface AiPracticeQuestion {
 
 export interface AiPracticeSet {
   title: string
-  format: 'reading' | 'quiz'
+  format: 'reading' | 'quiz' | 'dialogue'
   passage: string
   passageVi: string
   questions: AiPracticeQuestion[]
+  glossary: { vocabularyId: string; english: string; vietnamese: string }[]
 }
 
 export interface GameWord {
@@ -181,6 +184,15 @@ export interface GameOutcome {
   responseMs: number
   usedHint: boolean
   hadTargetMistake: boolean
+}
+
+export interface LearnSession {
+  userId: string
+  selectedDeckId: string | null
+  queueIds: string[]
+  deferredIds: string[]
+  status: 'idle' | 'active' | 'completed'
+  updatedAt: string
 }
 
 export interface AppSnapshot {

@@ -37,4 +37,25 @@ describe('legacy backup compatibility', () => {
     expect(snapshot?.vocabulary).toHaveLength(2)
     expect(snapshot?.vocabulary[0].sourceKey).toContain('about')
   })
+
+  it('saves and loads a learn session correctly from LocalRepository', async () => {
+    const repository = new LocalRepository()
+    const session = {
+      userId: 'u123',
+      selectedDeckId: 'deck-xyz',
+      queueIds: ['w1', 'w2'],
+      deferredIds: ['w3'],
+      status: 'active' as const,
+      updatedAt: '2026-07-19T00:00:00Z'
+    }
+
+    await repository.saveLearnSession(session)
+    const loaded = await repository.loadLearnSession('u123')
+    
+    expect(loaded).toEqual(session)
+
+    // Check it isolates by userId
+    const otherLoaded = await repository.loadLearnSession('u456')
+    expect(otherLoaded).toBeNull()
+  })
 })

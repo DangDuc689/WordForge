@@ -26,21 +26,23 @@ npm run build
 
 ## Supabase và AI
 
-1. Chạy `supabase/migrations/0001_vocab_siege.sql` trong SQL editor.
+1. Chạy `supabase db push` để áp dụng toàn bộ migration 0001–0003.
 2. Bật email magic-link/OTP và chỉ invite email cá nhân.
 3. Deploy hai Edge Functions trong `supabase/functions/`.
-4. Đặt `GEMINI_API_KEY` và tùy chọn `GEMINI_MODEL` trong Supabase secrets; mặc định model là `gemini-3.1-flash-lite`.
+4. Đặt `GROQ_API_KEY` và tùy chọn `GROQ_MODEL` trong Supabase secrets; mặc định model là `openai/gpt-oss-20b`.
 
-Frontend chỉ dùng publishable key. Gemini key chỉ được đọc trong Edge Functions. Nếu AI không cấu hình hoặc hết quota, các luồng nhập thủ công, SRS và game vẫn hoạt động.
+Frontend chỉ dùng publishable key. Groq key chỉ được đọc trong Edge Functions. Nếu AI không cấu hình hoặc hết quota, các luồng nhập thủ công, SRS và game vẫn hoạt động.
 
 ## Sinh catalog Oxford 3000 cá nhân
 
-Tính năng nhập Oxford dùng catalog JSON đã sinh trước; AI không được gọi khi người dùng nhập hoặc học. Không đặt `GEMINI_API_KEY` trong biến `VITE_*` và không commit khóa.
+Tính năng nhập Oxford dùng catalog JSON đã sinh trước; AI không được gọi khi người dùng nhập hoặc học. Không đặt `GROQ_API_KEY` trong biến `VITE_*` và không commit khóa.
 
 ```powershell
 python -m pip install pypdf
 npm run oxford:extract -- C:\duong-dan\American_Oxford_3000_by_CEFR_level.pdf C:\tmp\oxford-3000-us.txt
-$env:GEMINI_API_KEY='YOUR_KEY'
+$env:GROQ_API_KEY='YOUR_KEY'
+$env:GROQ_MODEL='openai/gpt-oss-20b'
+$env:GROQ_REQUEST_INTERVAL_MS='23000'
 npm run oxford:generate -- C:\tmp\oxford-3000-us.txt
 npm run oxford:validate
 ```

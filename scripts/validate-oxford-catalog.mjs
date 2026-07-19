@@ -27,7 +27,10 @@ async function main() {
         if (typeof entry[field] !== 'string' || !entry[field].trim()) throw new Error(`${label} thiếu ${field}`)
       }
       if (!entry.ipa.startsWith('/') || !entry.ipa.endsWith('/')) throw new Error(`${label} có IPA sai định dạng`)
-      if (!Array.isArray(entry.acceptedAnswers) || new Set(entry.acceptedAnswers).size !== entry.acceptedAnswers.length) throw new Error(`${label} có acceptedAnswers sai`)
+      if (!Array.isArray(entry.acceptedAnswers) || entry.acceptedAnswers.some((answer) => typeof answer !== 'string' || !answer.trim())) throw new Error(`${label} có acceptedAnswers sai`)
+      const normalizedAnswers = entry.acceptedAnswers.map((answer) => answer.trim().toLowerCase())
+      if (new Set(normalizedAnswers).size !== normalizedAnswers.length || normalizedAnswers.includes(entry.english.trim().toLowerCase())) throw new Error(`${label} có acceptedAnswers trùng hoặc lặp lại headword`)
+      if (/\b(?:noun|verb|adjective|adverb)\.$/i.test(entry.english)) throw new Error(`${label} có headword chứa nhãn từ loại`)
     }
     total += catalog.entries.length
   }

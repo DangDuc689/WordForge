@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { AiPracticeSet, AiVocabularyDraft } from '../domain/types'
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 const vocabularyDraftSchema = z.object({
@@ -17,7 +18,7 @@ const vocabularyDraftSchema = z.object({
 
 const practiceSetSchema = z.object({
   title: z.string().min(1),
-  format: z.enum(['reading', 'quiz']),
+  format: z.enum(['reading', 'quiz', 'dialogue']),
   passage: z.string().default(''),
   passageVi: z.string().default(''),
   questions: z.array(z.object({
@@ -28,12 +29,31 @@ const practiceSetSchema = z.object({
     answer: z.string(),
     explanation: z.string(),
   })).min(1),
+  glossary: z.array(z.object({
+    vocabularyId: z.string(),
+    english: z.string(),
+    vietnamese: z.string(),
+  })).default([]),
 })
 
 async function invoke<T>(functionName: string, body: Record<string, unknown>, schema: z.ZodTypeAny): Promise<T> {
   if (!supabase) throw new Error('AI cần Supabase được cấu hình. Bạn vẫn có thể nhập và học thủ công.')
   const { data, error } = await supabase.functions.invoke(functionName, { body })
-  if (error) throw new Error(error.message || 'AI hiện không phản hồi.')
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      try {
+        const errData = await error.context.json()
+        if (errData && typeof errData === 'object' && 'error' in errData) {
+          throw new Error(String(errData.error))
+        }
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message !== 'AI hiện không phản hồi.') {
+          throw parseErr
+        }
+      }
+    }
+    throw new Error(error.message || 'AI hiện không phản hồi.')
+  }
   const parsed = schema.safeParse(data)
   if (!parsed.success) throw new Error('AI trả về dữ liệu không hợp lệ. Vui lòng thử lại.')
   return parsed.data as T
@@ -42,5 +62,5 @@ async function invoke<T>(functionName: string, body: Record<string, unknown>, sc
 export const enrichVocabulary = (term: string, deckId: string): Promise<AiVocabularyDraft> =>
   invoke('ai-enrich-vocabulary', { term, deckId }, vocabularyDraftSchema)
 
-export const generatePractice = (deckId: string | null, format: 'reading' | 'quiz'): Promise<AiPracticeSet> =>
+export const generatePractice = (deckId: string | null, format: 'reading' | 'dialogue'): Promise<AiPracticeSet> =>
   invoke('ai-generate-practice', { deckId, format }, practiceSetSchema)
