@@ -39,7 +39,6 @@ export function SettingsPage() {
         </div>
       </section>
       <section className="panel settings-section"><div className="section-title"><span><b>Lịch học</b><small>Mốc ôn cố định theo 6 cấp nhớ</small></span></div>
-        <label>Số từ mới mỗi lượt <input type="number" min="1" max="50" value={snapshot.profile.newWordsPerSession} onChange={(event) => void updateProfile({ newWordsPerSession: Number(event.target.value) })} /></label>
         <div className="privacy-note">Cấp 1: 2 giờ · Cấp 2: 1 ngày · Cấp 3: 2 ngày · Cấp 4: 3 ngày · Cấp 5: 5 ngày · Nhớ sâu: 8 ngày.</div>
         <label>Múi giờ <select value={snapshot.profile.timezone} onChange={(event) => void updateProfile({ timezone: event.target.value })}><option value="Asia/Saigon">Asia/Saigon (UTC+7)</option><option value="UTC">UTC</option></select></label>
       </section>

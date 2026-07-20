@@ -9,6 +9,7 @@ import type {
   SrsCard,
   VocabularyItem,
 } from '../domain/types'
+import { deduplicateSnapshot } from '../domain/vocabulary'
 import { supabase } from '../lib/supabase'
 
 export interface AppRepository {
@@ -20,7 +21,9 @@ export interface AppRepository {
   saveWords(words: VocabularyItem[]): Promise<void>
   deleteWord(wordId: string): Promise<void>
   saveCard(card: SrsCard): Promise<void>
+  saveCards(cards: SrsCard[]): Promise<void>
   addReview(event: ReviewEvent): Promise<void>
+  addReviews(events: ReviewEvent[]): Promise<void>
   addGameRun(run: GameRun): Promise<void>
   savePracticeSession(session: PracticeSession): Promise<void>
   restore(snapshot: AppSnapshot): Promise<void>
@@ -44,7 +47,7 @@ export class LocalRepository implements AppRepository {
   private update(mutator: (snapshot: AppSnapshot) => AppSnapshot): void {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mutator(normalizeSnapshot(JSON.parse(raw) as AppSnapshot))))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeSnapshot(mutator(normalizeSnapshot(JSON.parse(raw) as AppSnapshot)))))
   }
 
   async saveProfile(profile: Profile) { this.update((snapshot) => ({ ...snapshot, profile })) }
@@ -74,17 +77,30 @@ export class LocalRepository implements AppRepository {
     }))
   }
   async saveCard(card: SrsCard) { this.update((snapshot) => ({ ...snapshot, cards: upsert(snapshot.cards, card) })) }
+  async saveCards(cards: SrsCard[]) {
+    if (!cards.length) return
+    this.update((snapshot) => ({ ...snapshot, cards: cards.reduce((items, card) => upsert(items, card), snapshot.cards) }))
+  }
   async addReview(event: ReviewEvent) { this.update((snapshot) => ({ ...snapshot, reviews: [event, ...snapshot.reviews].slice(0, 5_000) })) }
+  async addReviews(events: ReviewEvent[]) {
+    if (!events.length) return
+    this.update((snapshot) => ({ ...snapshot, reviews: [...events, ...snapshot.reviews].slice(0, 5_000) }))
+  }
   async addGameRun(run: GameRun) { this.update((snapshot) => ({ ...snapshot, gameRuns: [run, ...snapshot.gameRuns].slice(0, 500) })) }
   async savePracticeSession(session: PracticeSession) {
     this.update((snapshot) => ({ ...snapshot, practiceSessions: upsert(snapshot.practiceSessions, session).slice(0, 200) }))
   }
-  async restore(snapshot: AppSnapshot) { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)) }
+  async restore(snapshot: AppSnapshot) { localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeSnapshot(snapshot))) }
   async loadLearnSession(userId: string): Promise<LearnSession | null> {
     const raw = localStorage.getItem(`vocab-siege.learn-session.v1.${userId}`)
     if (!raw) return null
     try {
-      return JSON.parse(raw) as LearnSession
+      const session = JSON.parse(raw) as LearnSession
+      const snapshotRaw = localStorage.getItem(STORAGE_KEY)
+      if (!snapshotRaw) return session
+      const { idMap } = deduplicateSnapshot(prepareSnapshot(JSON.parse(snapshotRaw) as AppSnapshot))
+      const remap = (ids: string[]) => [...new Set(ids.map((id) => idMap.get(id) ?? id))]
+      return { ...session, queueIds: remap(session.queueIds), deferredIds: remap(session.deferredIds) }
     } catch {
       return null
     }
@@ -117,7 +133,7 @@ function normalizeCard(card: SrsCard): SrsCard {
   return { ...card, memoryLevel, lastRating: card.lastRating === null ? null : memoryLevel }
 }
 
-function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
+function prepareSnapshot(snapshot: AppSnapshot): AppSnapshot {
   const cards = snapshot.cards ?? []
   const legacy = cards.some((card) => !(card.memoryLevel >= 1 && card.memoryLevel <= 6))
   const decks = (snapshot.decks ?? []).map((deck) => ({
@@ -136,7 +152,13 @@ function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
     })),
     cards: cards.map(normalizeCard),
     reviews: legacy ? (snapshot.reviews ?? []).map((review) => ({ ...review, rating: legacyLevel(review.rating) })) : (snapshot.reviews ?? []),
+    gameRuns: snapshot.gameRuns ?? [],
+    practiceSessions: snapshot.practiceSessions ?? [],
   }
+}
+
+function normalizeSnapshot(snapshot: AppSnapshot): AppSnapshot {
+  return deduplicateSnapshot(prepareSnapshot(snapshot)).snapshot
 }
 
 async function upsertCloud(table: string, value: Record<string, unknown>): Promise<void> {
@@ -224,12 +246,21 @@ export class CloudRepository implements AppRepository {
     if (error) throw error
   }
   async saveCard(card: SrsCard) { await upsertCloud('srs_cards', card as unknown as Record<string, unknown>) }
+  async saveCards(cards: SrsCard[]) {
+    if (!cards.length) return
+    await upsertCloudBatch('srs_cards', cards as unknown as Record<string, unknown>[])
+  }
   async addReview(event: ReviewEvent) { await upsertCloud('review_events', event as unknown as Record<string, unknown>) }
+  async addReviews(events: ReviewEvent[]) {
+    if (!events.length) return
+    await upsertCloudBatch('review_events', events as unknown as Record<string, unknown>[])
+  }
   async addGameRun(run: GameRun) { await upsertCloud('game_runs', run as unknown as Record<string, unknown>) }
   async savePracticeSession(session: PracticeSession) {
     await upsertCloud('practice_sessions', session as unknown as Record<string, unknown>)
   }
   async restore(snapshot: AppSnapshot) {
+    snapshot = deduplicateSnapshot(snapshot).snapshot
     await this.saveProfile(snapshot.profile)
     await Promise.all(snapshot.decks.map((item) => this.saveDeck(item)))
     await this.saveWords(snapshot.vocabulary)

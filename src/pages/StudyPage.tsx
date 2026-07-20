@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import type { VocabularyItem } from '../domain/types'
+import { senseMeanings, vocabularySenses } from '../domain/vocabulary'
 import { isAcceptedAnswer } from '../lib/normalize'
 import { isDue, memoryLevelInfo, nextMemoryLevel } from '../lib/srs'
 import { NewStudyPage } from './NewStudyPage'
@@ -63,7 +64,7 @@ function MemoryLevelList({
               <div key={word.id} className={`memory-word-item ${isAdjusting ? 'adjusting' : ''}`}>
                 <div className="word-info">
                   <strong>{word.english}</strong>
-                  <span>{word.vietnamese}</span>
+                  <span>{senseMeanings(word).join(' · ')}</span>
                   <small className={isDue ? 'due' : ''}>{isDue ? 'Đến hạn ngay' : `Đến hạn: ${new Date(word.dueAt).toLocaleString('vi-VN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}</small>
                 </div>
                 <div className="word-actions">
@@ -172,7 +173,13 @@ export function StudyPage() { if (useLocation().pathname === '/learn') return <N
   const [correct, setCorrect] = useState(false)
   const [busy, setBusy] = useState(false)
   const startedAt = useRef(Date.now())
-  const current = queue[index]
+  const currentWord = queue[index]
+  const current = useMemo(() => {
+    if (!currentWord) return undefined
+    const senses = vocabularySenses(currentWord)
+    const reps = snapshot.cards.find((card) => card.vocabularyId === currentWord.id)?.reps ?? 0
+    return { ...currentWord, ...senses[reps % senses.length], sourceKey: currentWord.sourceKey }
+  }, [currentWord, snapshot.cards])
 
   const getMemoryLevel = (vocabularyId: string) => {
     const card = snapshot.cards.find(c => c.vocabularyId === vocabularyId)

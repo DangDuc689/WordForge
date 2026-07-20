@@ -1,5 +1,6 @@
 import type { GameWord, SrsCard, VocabularyItem } from '../domain/types'
 import { isDue } from '../lib/srs'
+import { vocabularySenses } from '../domain/vocabulary'
 
 export type GamePoolSource = 'due' | 'all'
 
@@ -28,13 +29,18 @@ export function buildGamePool(
       return priority(cardA) - priority(cardB) || a.tier - b.tier
     })
     .slice(0, 60)
-    .map((word) => ({
-      id: word.id,
-      english: word.english,
-      vietnamese: word.vietnamese,
-      acceptedAnswers: word.acceptedAnswers,
-      category: word.partOfSpeech,
-      tier: word.tier,
-      isDue: isDue(cardMap.get(word.id), now),
-    }))
+    .map((word) => {
+      const card = cardMap.get(word.id)
+      const senses = vocabularySenses(word)
+      const sense = senses[(card?.reps ?? 0) % senses.length]
+      return {
+        id: word.id,
+        english: word.english,
+        vietnamese: sense.vietnamese,
+        acceptedAnswers: word.acceptedAnswers,
+        category: sense.partOfSpeech,
+        tier: sense.tier,
+        isDue: isDue(card, now),
+      }
+    })
 }

@@ -9,4 +9,8 @@ describe('answer normalization', () => {
     expect(isAcceptedAnswer(' organiser ', 'organizer', ['organiser'])).toBe(true)
     expect(isAcceptedAnswer('arrange', 'organizer', ['organiser'])).toBe(false)
   })
+  it('accepts case-insensitive answers', () => {
+    expect(isAcceptedAnswer('monday', 'Monday')).toBe(true)
+    expect(isAcceptedAnswer('Monday', 'monday')).toBe(true)
+  })
 })

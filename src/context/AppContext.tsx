@@ -15,6 +15,7 @@ import type {
 import { CloudRepository, LocalRepository, type AppRepository } from '../data/repository'
 import { loadOxfordCatalog, type OxfordLevel } from '../data/oxfordCatalog'
 import { STARTER_WORDS } from '../data/starterWords'
+import { deduplicateSnapshot, mergeVocabularyItems, normalizeHeadword, withVocabularySenses } from '../domain/vocabulary'
 import { aggregateGameOutcomes, buildDashboardStats, createSrsCard, isDue, memoryLevelInfo, ratingFromGameOutcome, scheduleReview } from '../lib/srs'
 import { sanitizeLearnSession, generateNextBatch } from '../lib/learn'
 import { useAuth } from './AuthContext'
@@ -97,6 +98,17 @@ function createInitialSnapshot(userId: string): AppSnapshot {
       exampleEn: '',
       exampleVi: '',
       notes: index < 72 ? 'Từ mẫu của Vocab Siege.' : '',
+      senses: [{
+        sourceKey: `starter:${index}:${item.english}`,
+        vietnamese: item.vietnamese,
+        partOfSpeech: item.partOfSpeech,
+        tier: item.tier,
+        cefr: item.cefr,
+        ipa: '',
+        exampleEn: '',
+        exampleVi: '',
+        notes: index < 72 ? 'Từ mẫu của Vocab Siege.' : '',
+      }],
       status: 'active' as const,
       source: 'starter' as const,
       sourceKey: `starter:${index}:${item.english}`,
@@ -110,7 +122,7 @@ function createInitialSnapshot(userId: string): AppSnapshot {
   }
 }
 
-const EMPTY_STATS = { newCount: 0, learningCount: 0, dueCount: 0, weakCount: 0, streak: 0, accuracy: 100 }
+const EMPTY_STATS = { newCount: 0, learningCount: 0, dueCount: 0, weakCount: 0, streak: 0, accuracy: 100, todayLearnedCount: 0, todayReviewedCount: 0 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { userId, isLocalMode } = useAuth()
@@ -196,8 +208,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       async saveWord(input) {
         const current = requireSnapshot()
         const existing = input.id ? current.vocabulary.find((item) => item.id === input.id) : undefined
+        const collision = current.vocabulary.find((item) => item.deckId === input.deckId
+          && normalizeHeadword(item.english) === normalizeHeadword(input.english)
+          && item.id !== input.id)
+        if (existing && collision) throw new Error('Từ này đã tồn tại trong bộ. Hãy chỉnh sửa mục hiện có để thêm nghĩa.')
         const stamp = nowIso()
-        const word: VocabularyItem = {
+        let word: VocabularyItem = withVocabularySenses({
           ...input,
           id: input.id ?? crypto.randomUUID(),
           userId,
@@ -205,6 +221,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           sourceKey: existing?.sourceKey ?? '',
           createdAt: existing?.createdAt ?? stamp,
           updatedAt: stamp,
+        }, input.senses?.length ? input.senses : [{
+          sourceKey: existing?.sourceKey ?? '',
+          vietnamese: input.vietnamese,
+          partOfSpeech: input.partOfSpeech,
+          tier: input.tier,
+          cefr: input.cefr,
+          ipa: input.ipa,
+          exampleEn: input.exampleEn,
+          exampleVi: input.exampleVi,
+          notes: input.notes,
+        }])
+        if (!existing && collision) {
+          word = mergeVocabularyItems(collision, { ...word, id: collision.id, createdAt: collision.createdAt })
         }
         await repository.saveWord(word)
         setSnapshot((state) => state ? ({
@@ -252,11 +281,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       async importOxfordLevels(levels) {
         const current = requireSnapshot()
         const selected = [...new Set(levels)]
-        const knownSourceKeys = new Set(current.vocabulary.filter((word) => word.source === 'oxford-3000').map((word) => word.sourceKey))
         const knownDecks = new Map(current.decks.filter((deck) => deck.source === 'oxford-3000').map((deck) => [deck.sourceKey, deck]))
+        const knownWords = new Map(current.vocabulary.map((word) => [`${word.deckId}|${normalizeHeadword(word.english)}`, word]))
         const importedDecks: Deck[] = []
         const importedWords: VocabularyItem[] = []
         let created = 0
+        let updated = 0
         let skipped = 0
 
         for (const level of selected) {
@@ -279,30 +309,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
           const stamp = nowIso()
           const words = catalog.entries.flatMap((entry) => {
-            if (knownSourceKeys.has(entry.sourceKey)) {
-              skipped += 1
-              return []
-            }
-            knownSourceKeys.add(entry.sourceKey)
-            return [{
+            const key = `${deck.id}|${normalizeHeadword(entry.english)}`
+            const existing = knownWords.get(key)
+            const incoming: VocabularyItem = withVocabularySenses({
               ...entry,
-              id: crypto.randomUUID(), userId, deckId: deck.id,
-              status: 'active' as const,
+              id: existing?.id ?? crypto.randomUUID(), userId, deckId: deck.id,
+              status: existing?.status ?? 'active' as const,
               source: 'oxford-3000' as const,
-              createdAt: stamp, updatedAt: stamp,
-            }]
+              createdAt: existing?.createdAt ?? stamp, updatedAt: stamp,
+            }, entry.senses)
+            if (existing) {
+              const incomingKeys = new Set(entry.senses.map((sense) => sense.sourceKey))
+              const customSenses = (existing.senses ?? []).filter((sense) => !incomingKeys.has(sense.sourceKey))
+              const next = withVocabularySenses({
+                ...existing,
+                ...incoming,
+                id: existing.id,
+                status: existing.status,
+                source: existing.source,
+                sourceKey: entry.sourceKey,
+                createdAt: existing.createdAt,
+                updatedAt: stamp,
+                acceptedAnswers: [...new Set([...existing.acceptedAnswers, ...incoming.acceptedAnswers])],
+              }, [...entry.senses, ...customSenses])
+              const before = JSON.stringify({ sourceKey: existing.sourceKey, acceptedAnswers: existing.acceptedAnswers, senses: existing.senses })
+              const after = JSON.stringify({ sourceKey: next.sourceKey, acceptedAnswers: next.acceptedAnswers, senses: next.senses })
+              if (before === after) {
+                skipped += 1
+                return []
+              }
+              updated += 1
+              knownWords.set(key, next)
+              return [next]
+            }
+            created += 1
+            knownWords.set(key, incoming)
+            return [incoming]
           })
           await repository.saveWords(words)
           importedWords.push(...words)
-          created += words.length
         }
 
         setSnapshot((state) => state ? ({
           ...state,
           decks: [...state.decks, ...importedDecks],
-          vocabulary: [...importedWords, ...state.vocabulary],
+          vocabulary: [...importedWords, ...state.vocabulary.filter((word) => !importedWords.some((imported) => imported.id === word.id))],
         }) : state)
-        return { created, skipped, failed: 0, deckIds: selected.flatMap((level) => {
+        return { created, updated, merged: 0, skipped, failed: 0, deckIds: selected.flatMap((level) => {
           const deck = knownDecks.get(`oxford-3000:${level.toLowerCase()}`)
           return deck ? [deck.id] : []
         }) }
@@ -341,7 +394,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             usedHint: outcome.usedHint,
           })]
         })
-        await Promise.all(reviewResults.flatMap((result) => [repository.saveCard(result.card), repository.addReview(result.event)]))
+        await Promise.all([
+          repository.saveCards(reviewResults.map((result) => result.card)),
+          repository.addReviews(reviewResults.map((result) => result.event)),
+        ])
         setSnapshot((state) => state ? ({
           ...state,
           gameRuns: [run, ...state.gameRuns],
@@ -389,18 +445,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           gameRuns: (parsed.gameRuns ?? []).map((item) => ({ ...item, userId })),
           practiceSessions: (parsed.practiceSessions ?? []).map((item) => ({ ...item, userId })),
         }
-        await repository.restore(rebound)
-        setSnapshot(rebound)
+        const upgraded = deduplicateSnapshot(rebound).snapshot
+        await repository.restore(upgraded)
+        setSnapshot(upgraded)
       },
       async adjustMemoryLevel(vocabularyId, action) {
         const current = requireSnapshot()
         const existing = current.cards.find((item) => item.vocabularyId === vocabularyId)
         if (!existing) throw new Error('Không tìm thấy thẻ ghi nhớ cho từ này.')
-        
+
         let newLevel: 1 | 2 | 3 | 4 | 5 | 6 = existing.memoryLevel
         if (action === 'reset-to-one') newLevel = 1
         else if (action === 'decrement') newLevel = Math.max(1, existing.memoryLevel - 1) as 1 | 2 | 3 | 4 | 5 | 6
-        
+
         if (newLevel === existing.memoryLevel) return
         
         const schedule = memoryLevelInfo(newLevel)
@@ -436,7 +493,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           updatedAt: new Date().toISOString()
         }, snapshot)
 
-        const nextSession = generateNextBatch(updatedSession, snapshot, snapshot.profile.newWordsPerSession)
+        const nextSession = generateNextBatch(updatedSession, snapshot, 999999)
         await saveAndSetSession(nextSession)
       },
       async deferLearnWord(vocabularyId) {
@@ -446,11 +503,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!nextDeferred.includes(vocabularyId)) {
           nextDeferred.push(vocabularyId)
         }
+
+        let finalQueue = nextQueue
+        let finalDeferred = nextDeferred
+        let nextStatus: 'active' | 'completed' | 'idle' = nextQueue.length > 0 ? 'active' : 'idle'
+
+        if (nextQueue.length === 0) {
+          const availableIds = new Set(
+            snapshot.vocabulary
+              .filter(w => w.status === 'active' && (learnSession.selectedDeckId === null || w.deckId === learnSession.selectedDeckId) && !snapshot.cards.some(c => c.vocabularyId === w.id))
+              .map(w => w.id)
+          )
+          const eligibleDeferred = finalDeferred.filter(id => availableIds.has(id))
+          if (eligibleDeferred.length > 0) {
+            finalQueue = eligibleDeferred
+            finalDeferred = finalDeferred.filter(id => !eligibleDeferred.includes(id))
+            nextStatus = 'active'
+          } else {
+            nextStatus = 'completed'
+          }
+        }
+
         const updatedSession = sanitizeLearnSession({
           ...learnSession,
-          queueIds: nextQueue,
-          deferredIds: nextDeferred,
-          status: nextQueue.length > 0 ? 'active' : 'idle',
+          queueIds: finalQueue,
+          deferredIds: finalDeferred,
+          status: nextStatus,
           updatedAt: new Date().toISOString()
         }, snapshot)
 
@@ -482,7 +560,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }) : state)
 
         const nextQueue = learnSession.queueIds.filter(id => id !== input.vocabularyId)
-        const nextStatus = nextQueue.length > 0 ? 'active' : 'completed'
 
         const tempSnapshot: AppSnapshot = {
           ...current,
@@ -491,9 +568,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : [result.card, ...current.cards]
         }
 
+        let finalQueue = nextQueue
+        let finalDeferred = [...learnSession.deferredIds]
+        let nextStatus: 'active' | 'completed' | 'idle' = nextQueue.length > 0 ? 'active' : 'completed'
+
+        if (nextQueue.length === 0 && finalDeferred.length > 0) {
+          const availableIds = new Set(
+            tempSnapshot.vocabulary
+              .filter(w => w.status === 'active' && (learnSession.selectedDeckId === null || w.deckId === learnSession.selectedDeckId) && !tempSnapshot.cards.some(c => c.vocabularyId === w.id))
+              .map(w => w.id)
+          )
+          const eligibleDeferred = finalDeferred.filter(id => availableIds.has(id))
+          if (eligibleDeferred.length > 0) {
+            finalQueue = eligibleDeferred
+            finalDeferred = finalDeferred.filter(id => !eligibleDeferred.includes(id))
+            nextStatus = 'active'
+          }
+        }
+
         const updatedSession = sanitizeLearnSession({
           ...learnSession,
-          queueIds: nextQueue,
+          queueIds: finalQueue,
+          deferredIds: finalDeferred,
           status: nextStatus,
           updatedAt: new Date().toISOString()
         }, tempSnapshot)
@@ -502,7 +598,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       async generateNextBatchAction() {
         if (savingSession || !learnSession || !snapshot) return
-        const nextSession = generateNextBatch(learnSession, snapshot, snapshot.profile.newWordsPerSession)
+        const nextSession = generateNextBatch(learnSession, snapshot, 999999)
         await saveAndSetSession(nextSession)
       },
       reload,

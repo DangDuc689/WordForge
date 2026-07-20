@@ -4,6 +4,7 @@ import { OxfordImportModal } from '../components/OxfordImportModal'
 import { VocabularyForm } from '../components/VocabularyForm'
 import { useApp } from '../context/AppContext'
 import type { PartOfSpeech, VocabularyItem } from '../domain/types'
+import { senseCefr, senseMeanings, senseParts, vocabularySenses } from '../domain/vocabulary'
 
 export function VocabularyPage() {
   const { snapshot, archiveWord, deleteWord, saveDeck, deleteDeck } = useApp()
@@ -21,10 +22,10 @@ export function VocabularyPage() {
   const filtered = useMemo(() => snapshot.vocabulary.filter((word) => {
     const needle = query.toLocaleLowerCase('vi')
     return (deckFilter === 'all' || word.deckId === deckFilter)
-      && (partFilter === 'all' || word.partOfSpeech === partFilter)
+      && (partFilter === 'all' || senseParts(word).includes(partFilter))
       && (statusFilter === 'all' || word.status === statusFilter)
       && (progressFilter === 'all' || (progressFilter === 'new' ? !cardsByWord.has(word.id) : progressFilter === 'learned' ? cardsByWord.has(word.id) : Boolean(cardsByWord.get(word.id) && cardsByWord.get(word.id)!.reps > 0)))
-      && (!needle || word.english.toLowerCase().includes(needle) || word.vietnamese.toLocaleLowerCase('vi').includes(needle))
+      && (!needle || word.english.toLowerCase().includes(needle) || senseMeanings(word).some((meaning) => meaning.toLocaleLowerCase('vi').includes(needle)))
   }), [cardsByWord, deckFilter, partFilter, progressFilter, query, snapshot.vocabulary, statusFilter])
   const pageSize = 100
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -71,9 +72,9 @@ export function VocabularyPage() {
             const card = cardsByWord.get(word.id)
             const state = !card ? 'Mới · chưa học' : card.memoryLevel === 6 ? 'Nhớ sâu' : ('Cấp độ ' + card.memoryLevel)
             return <tr key={word.id} className={word.status === 'archived' ? 'archived' : ''}>
-              <td><button className="speak-button" onClick={() => speak(word.english)} aria-label={`Phát âm ${word.english}`}>◖</button><span><b>{word.english}</b><small>{word.ipa || word.acceptedAnswers.join(' · ') || 'Chưa có IPA'}</small></span></td>
-              <td><b>{word.vietnamese}</b><small>{word.exampleEn}</small></td>
-              <td><span className={`tier tier-${word.tier}`}>T{word.tier}</span><small>{word.partOfSpeech} · {word.cefr || '—'}</small></td>
+              <td><button className="speak-button" onClick={() => speak(word.english)} aria-label={`Phát âm ${word.english}`}>◖</button><span><b>{word.english}</b><small>{[...new Set(vocabularySenses(word).map((sense) => sense.ipa).filter(Boolean))].join(' · ') || word.acceptedAnswers.join(' · ') || 'Chưa có IPA'}</small></span></td>
+              <td><b>{senseMeanings(word).join(' · ')}</b><small>{word.exampleEn}{vocabularySenses(word).length > 1 ? ` · ${vocabularySenses(word).length} nghĩa` : ''}</small></td>
+              <td><span className={`tier tier-${word.tier}`}>T{word.tier}</span><small>{senseParts(word).join(' / ')} · {senseCefr(word).filter(Boolean).join(' / ') || '—'}</small></td>
               <td><b>{state}</b><small>{card ? `Đã ôn ${card.reps} lần` : 'Chưa lên lịch'}</small></td>
               <td><button className="table-action" onClick={() => setEditing(word)}>Sửa</button><button className="table-action" onClick={() => void archiveWord(word)}>{word.status === 'active' ? 'Lưu trữ' : 'Khôi phục'}</button><button className="table-action" style={{ color: '#ef4444' }} onClick={() => window.confirm(`Bạn có chắc muốn xóa từ "${word.english}" không?`) && void deleteWord(word.id)}>Xóa</button></td>
             </tr>

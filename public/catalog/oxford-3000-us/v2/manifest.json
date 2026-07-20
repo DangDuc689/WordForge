@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "catalogVersion": "oxford-3000-us-v2",
+  "variant": "en-US",
+  "sourceUrl": "https://www.oxfordlearnersdictionaries.com/external/pdf/wordlists/oxford-3000-5000/American_Oxford_3000_by_CEFR_level.pdf",
+  "ready": true,
+  "message": "",
+  "levels": [
+    {
+      "level": "A1",
+      "entryCount": 898,
+      "file": "a1.json"
+    },
+    {
+      "level": "A2",
+      "entryCount": 864,
+      "file": "a2.json"
+    },
+    {
+      "level": "B1",
+      "entryCount": 806,
+      "file": "b1.json"
+    },
+    {
+      "level": "B2",
+      "entryCount": 729,
+      "file": "b2.json"
+    }
+  ]
+}

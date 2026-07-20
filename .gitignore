@@ -9,3 +9,4 @@ coverage
 .supabase
 public/catalog/**/.generation-progress.json
 Note/
+supabase/.temp/

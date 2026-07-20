@@ -34,8 +34,10 @@ describe('legacy backup compatibility', () => {
     ])
     const snapshot = await repository.load()
     expect(snapshot?.decks[0].source).toBe('manual')
-    expect(snapshot?.vocabulary).toHaveLength(2)
+    expect(snapshot?.vocabulary).toHaveLength(1)
     expect(snapshot?.vocabulary[0].sourceKey).toContain('about')
+    expect(snapshot?.vocabulary[0].senses).toHaveLength(2)
+    expect(snapshot?.vocabulary[0].senses?.map((sense) => sense.partOfSpeech)).toEqual(['preposition', 'adverb'])
   })
 
   it('saves and loads a learn session correctly from LocalRepository', async () => {

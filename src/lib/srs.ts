@@ -20,6 +20,9 @@ export const MEMORY_LEVELS = [
 export const memoryLevelInfo = (level: ReviewRating) => MEMORY_LEVELS[level - 1]
 
 export function nextMemoryLevel(card: SrsCard, correct: boolean): ReviewRating {
+  if (card.reps === 0) {
+    return 1 as ReviewRating
+  }
   const current = card.memoryLevel >= 1 && card.memoryLevel <= 6 ? card.memoryLevel : 1
   return Math.max(1, Math.min(6, current + (correct ? 1 : -1))) as ReviewRating
 }
@@ -136,6 +139,7 @@ export function buildDashboardStats(
   const activeCards = cards.filter((card) => activeIds.has(card.vocabularyId))
   const reviewed = reviews.filter((event) => activeIds.has(event.vocabularyId))
   const correct = reviewed.filter((event) => event.correct).length
+  const todayStr = dayKey(now, timezone)
   return {
     newCount: vocabulary.filter((item) => item.status === 'active' && !cards.some((card) => card.vocabularyId === item.id)).length,
     learnedCount: activeCards.length,
@@ -144,5 +148,11 @@ export function buildDashboardStats(
     weakCount: activeCards.filter((card) => card.memoryLevel <= 2 || card.lapses > 0).length,
     streak: calculateStreak(reviewed, timezone, now),
     accuracy: reviewed.length ? Math.round((correct / reviewed.length) * 100) : 100,
+    todayLearnedCount: activeCards.filter((card) => dayKey(card.createdAt, timezone) === todayStr).length,
+    todayReviewedCount: new Set(
+      reviewed
+        .filter((event) => dayKey(event.reviewedAt, timezone) === todayStr)
+        .map((event) => event.vocabularyId)
+    ).size,
   }
 }

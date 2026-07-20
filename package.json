@@ -12,6 +12,7 @@
     "typecheck": "tsc -b --pretty false",
     "oxford:extract": "python scripts/extract_oxford_pdf.py",
     "oxford:generate": "node scripts/generate-oxford-catalog.mjs",
+    "oxford:build-v2": "node scripts/build-oxford-v2.mjs",
     "oxford:validate": "node scripts/validate-oxford-catalog.mjs"
   },
   "dependencies": {

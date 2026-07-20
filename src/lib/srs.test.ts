@@ -12,8 +12,13 @@ describe('six-level memory schedule', () => {
   it('advances through all levels using the fixed intervals', () => {
     const now = new Date('2026-07-16T00:00:00Z')
     let card = createSrsCard('u', 'v', now)
+    // First review/learning session (reps = 0) keeps it at level 1
+    card = scheduleReview({ card, mode: 'learn', correct: true, now }).card
+    expect(card.memoryLevel).toBe(1)
+
+    // Subsequent correct reviews advance it through levels 2, 3, 4, 5, 6
     for (const level of [2, 3, 4, 5, 6] as const) {
-      card = scheduleReview({ card, mode: 'learn', correct: true, now }).card
+      card = scheduleReview({ card, mode: 'review', correct: true, now }).card
       expect(card.memoryLevel).toBe(level)
       expect(card.dueAt).toBe(new Date(now.getTime() + memoryLevelInfo(level).delayMs).toISOString())
     }
@@ -22,7 +27,8 @@ describe('six-level memory schedule', () => {
   it('moves down one level on an incorrect answer without going below level 1', () => {
     const now = new Date('2026-07-16T00:00:00Z')
     let card = createSrsCard('u', 'v', now)
-    for (let i = 0; i < 5; i++) card = scheduleReview({ card, mode: 'review', correct: true, now }).card
+    // To reach level 6, we need 6 correct reviews (1 learning + 5 reviews)
+    for (let i = 0; i < 6; i++) card = scheduleReview({ card, mode: 'review', correct: true, now }).card
     expect(card.memoryLevel).toBe(6)
     card = scheduleReview({ card, mode: 'review', correct: false, now }).card
     expect(card.memoryLevel).toBe(5)

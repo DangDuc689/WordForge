@@ -41,11 +41,25 @@ export interface VocabularyItem {
   exampleEn: string
   exampleVi: string
   notes: string
+  /** Canonical list of meanings/usages for this headword. Legacy records are upgraded from the scalar fields above. */
+  senses?: VocabularySense[]
   status: VocabularyStatus
   source: VocabularySource
   sourceKey: string
   createdAt: string
   updatedAt: string
+}
+
+export interface VocabularySense {
+  sourceKey: string
+  vietnamese: string
+  partOfSpeech: PartOfSpeech
+  tier: 1 | 2 | 3
+  cefr: CefrLevel
+  ipa: string
+  exampleEn: string
+  exampleVi: string
+  notes: string
 }
 
 export interface OxfordCatalogEntry {
@@ -60,10 +74,11 @@ export interface OxfordCatalogEntry {
   exampleEn: string
   exampleVi: string
   notes: string
+  senses: VocabularySense[]
 }
 
 export interface OxfordCatalog {
-  schemaVersion: 1
+  schemaVersion: 2
   catalogVersion: string
   variant: 'en-US'
   level: Exclude<CefrLevel, 'C1' | 'C2' | ''>
@@ -74,6 +89,8 @@ export interface OxfordCatalog {
 
 export interface VocabularyImportResult {
   created: number
+  updated: number
+  merged: number
   skipped: number
   failed: number
   deckIds: string[]
@@ -213,4 +230,6 @@ export interface DashboardStats {
   weakCount: number
   streak: number
   accuracy: number
+  todayLearnedCount: number
+  todayReviewedCount: number
 }

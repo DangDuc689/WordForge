@@ -40,7 +40,7 @@ export function OxfordImportModal({ onClose, onImported }: Props) {
     setMessage(`Đang nhập ${selected.join(', ')}… Không đóng cửa sổ này.`)
     try {
       const result = await importOxfordLevels(selected)
-      setMessage(`Đã thêm ${result.created.toLocaleString('vi-VN')} thẻ; bỏ qua ${result.skipped.toLocaleString('vi-VN')} thẻ đã có.`)
+      setMessage(`Đã thêm ${result.created.toLocaleString('vi-VN')} headword; cập nhật ${result.updated.toLocaleString('vi-VN')}; bỏ qua ${result.skipped.toLocaleString('vi-VN')} mục không đổi.`)
       onImported(result.deckIds)
     } catch (cause) {
       setMessage(`${cause instanceof Error ? cause.message : 'Nhập catalog thất bại.'} Bạn có thể chạy lại; các thẻ đã lưu sẽ không bị nhân đôi.`)
@@ -57,7 +57,7 @@ export function OxfordImportModal({ onClose, onImported }: Props) {
           <button className="icon-button" disabled={busy} onClick={onClose} aria-label="Đóng">×</button>
         </div>
         <div className="oxford-import-body">
-          <p>Chọn cấp độ cần thêm. Mỗi từ loại là một thẻ riêng và mỗi CEFR được tạo thành một bộ từ độc lập.</p>
+          <p>Chọn cấp độ cần thêm. Mỗi headword chỉ có một thẻ trong từng bộ; các từ loại và nghĩa được giữ thành nhiều sense.</p>
           <div className="oxford-level-grid">
             {OXFORD_LEVELS.map((level) => {
               const info = manifest?.levels.find((item) => item.level === level)

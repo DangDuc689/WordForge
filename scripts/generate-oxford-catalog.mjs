@@ -3,8 +3,8 @@ import { basename, dirname, resolve } from 'node:path'
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2']
 const SOURCE_URL = 'https://www.oxfordlearnersdictionaries.com/external/pdf/wordlists/oxford-3000-5000/American_Oxford_3000_by_CEFR_level.pdf'
-const CATALOG_VERSION = 'oxford-3000-us-v1'
-const DEFAULT_OUTPUT = 'public/catalog/oxford-3000-us/v1'
+const CATALOG_VERSION = 'oxford-3000-us-v2'
+const DEFAULT_OUTPUT = 'public/catalog/oxford-3000-us/v2'
 const DEFAULT_MODEL = 'openai/gpt-oss-20b'
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
 const DEFAULT_REQUEST_INTERVAL_MS = 23_000
@@ -25,6 +25,34 @@ const posMap = new Map([
 const tierFor = (level) => level === 'A1' ? 1 : level === 'A2' ? 2 : 3
 const slug = (value) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 const sleep = (milliseconds) => new Promise((done) => setTimeout(done, milliseconds))
+const normalizedHeadword = (value) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US')
+
+function groupHeadwords(entries) {
+  const groups = new Map()
+  for (const entry of entries) {
+    const key = `${entry.cefr}|${normalizedHeadword(entry.english)}`
+    groups.set(key, [...(groups.get(key) ?? []), entry])
+  }
+  return [...groups.values()].map((senses) => {
+    const primary = senses[0]
+    return {
+      ...primary,
+      sourceKey: `${primary.cefr.toLowerCase()}:${slug(primary.english)}`,
+      acceptedAnswers: [...new Set(senses.flatMap((sense) => sense.acceptedAnswers))],
+      senses: senses.map((sense) => ({
+        sourceKey: sense.sourceKey,
+        vietnamese: sense.vietnamese,
+        partOfSpeech: sense.partOfSpeech,
+        cefr: sense.cefr,
+        tier: sense.tier,
+        ipa: sense.ipa,
+        exampleEn: sense.exampleEn,
+        exampleVi: sense.exampleVi,
+        notes: sense.notes,
+      })),
+    }
+  })
+}
 
 function parseSource(text) {
   const entries = []
@@ -174,8 +202,9 @@ async function main() {
   const outputRoot = resolve(process.argv[3] ?? DEFAULT_OUTPUT)
   if (!inputPath) throw new Error('Cách dùng: node scripts/generate-oxford-catalog.mjs <oxford.txt> [output-directory] [--parse-only]')
   const sourceEntries = parseSource(await readFile(resolve(inputPath), 'utf8'))
-  const counts = Object.fromEntries(LEVELS.map((level) => [level, sourceEntries.filter((entry) => entry.cefr === level).length]))
-  console.log(`Đã phân tích ${sourceEntries.length} thẻ: ${JSON.stringify(counts)}`)
+  const parsedCounts = Object.fromEntries(LEVELS.map((level) => [level, sourceEntries.filter((entry) => entry.cefr === level).length]))
+  const counts = Object.fromEntries(LEVELS.map((level) => [level, new Set(sourceEntries.filter((entry) => entry.cefr === level).map((entry) => normalizedHeadword(entry.english))).size]))
+  console.log(`Đã phân tích ${sourceEntries.length} nghĩa: ${JSON.stringify(parsedCounts)}; ${Object.values(counts).reduce((sum, count) => sum + count, 0)} headword.`)
   if (process.argv.includes('--parse-only')) return
 
   const apiKey = process.env.GROQ_API_KEY
@@ -212,15 +241,15 @@ async function main() {
 
   const generatedAt = new Date().toISOString()
   for (const level of LEVELS) {
-    const entries = sourceEntries.filter((entry) => entry.cefr === level).map((entry) => progress[entry.sourceKey])
+    const entries = groupHeadwords(sourceEntries.filter((entry) => entry.cefr === level).map((entry) => progress[entry.sourceKey]))
     if (entries.some((entry) => !entry)) throw new Error(`Catalog ${level} chưa đủ dữ liệu.`)
     await writeJsonAtomic(resolve(outputRoot, `${level.toLowerCase()}.json`), {
-      schemaVersion: 1, catalogVersion: CATALOG_VERSION, variant: 'en-US', level,
+      schemaVersion: 2, catalogVersion: CATALOG_VERSION, variant: 'en-US', level,
       sourceUrl: SOURCE_URL, generatedAt, entries,
     })
   }
   await writeJsonAtomic(resolve(outputRoot, 'manifest.json'), {
-    schemaVersion: 1, catalogVersion: CATALOG_VERSION, variant: 'en-US', sourceUrl: SOURCE_URL,
+    schemaVersion: 2, catalogVersion: CATALOG_VERSION, variant: 'en-US', sourceUrl: SOURCE_URL,
     ready: true, message: '',
     levels: LEVELS.map((level) => ({ level, entryCount: counts[level], file: `${level.toLowerCase()}.json` })),
   })

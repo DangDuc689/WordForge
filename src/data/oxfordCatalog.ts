@@ -22,10 +22,21 @@ const entrySchema = z.object({
   exampleEn: z.string().min(1),
   exampleVi: z.string().min(1),
   notes: z.string(),
+  senses: z.array(z.object({
+    sourceKey: z.string().min(1),
+    vietnamese: z.string().min(1),
+    partOfSpeech: partOfSpeechSchema,
+    cefr: z.enum(OXFORD_LEVELS),
+    tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    ipa: z.string().min(1),
+    exampleEn: z.string().min(1),
+    exampleVi: z.string().min(1),
+    notes: z.string(),
+  })).min(1),
 })
 
 const catalogSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   catalogVersion: z.string().min(1),
   variant: z.literal('en-US'),
   level: z.enum(OXFORD_LEVELS),
@@ -35,7 +46,7 @@ const catalogSchema = z.object({
 })
 
 const manifestSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   catalogVersion: z.string().min(1),
   variant: z.literal('en-US'),
   sourceUrl: z.string().url(),
@@ -50,7 +61,7 @@ const manifestSchema = z.object({
 
 export type OxfordCatalogManifest = z.infer<typeof manifestSchema>
 
-const catalogRoot = '/catalog/oxford-3000-us/v1'
+const catalogRoot = '/catalog/oxford-3000-us/v2'
 
 async function fetchJson(path: string): Promise<unknown> {
   const response = await fetch(path, { credentials: 'same-origin' })
@@ -67,5 +78,7 @@ export async function loadOxfordCatalog(level: OxfordLevel): Promise<OxfordCatal
   if (parsed.level !== level) throw new Error(`Catalog ${level} không khớp cấp độ.`)
   const uniqueKeys = new Set(parsed.entries.map((entry) => entry.sourceKey))
   if (uniqueKeys.size !== parsed.entries.length) throw new Error(`Catalog ${level} có sourceKey trùng.`)
+  const headwords = parsed.entries.map((entry) => entry.english.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US'))
+  if (new Set(headwords).size !== headwords.length) throw new Error(`Catalog ${level} có headword trùng.`)
   return parsed
 }

@@ -49,8 +49,8 @@ const COLORS = { 1: '#4fd6a0', 2: '#f5c451', 3: '#f5628f' }
 const POINTS = { 1: 10, 2: 20, 3: 35 }
 const DAMAGE = { 1: 8, 2: 12, 3: 18 }
 const WORDS_PER_WAVE = 6
-const SPAWN_INTERVAL = 1.75
-const MONSTER_SPEED = 34
+const SPAWN_INTERVAL = 2.5
+const MONSTER_SPEED = 22
 
 export function buildWordQueue(words: GameWord[], random = Math.random) {
   const shuffle = (items: GameWord[]) => {
@@ -98,6 +98,7 @@ export class GameEngine {
   private centerY = 0
   private dpr = 1
   private audioContext: AudioContext | null = null
+  private destroyed = false
 
   constructor(canvas: HTMLCanvasElement, words: GameWord[], inputMode: 'typing' | 'touch', callbacks: Callbacks) {
     const context = canvas.getContext('2d')
@@ -117,6 +118,7 @@ export class GameEngine {
   }
 
   start() {
+    this.destroyed = false
     this.resize()
     this.startWave(1)
     this.lastFrame = performance.now()
@@ -124,8 +126,20 @@ export class GameEngine {
     this.emit(true)
   }
 
-  destroy() { cancelAnimationFrame(this.frame); void this.audioContext?.close() }
+  destroy() {
+    if (this.destroyed) return
+    this.destroyed = true
+    cancelAnimationFrame(this.frame)
+    if (this.audioContext?.state !== 'closed') void this.audioContext?.close().catch(() => undefined)
+    this.audioContext = null
+    // Release the large GPU-backed surface before React swaps to the result view.
+    // Keeping this backing buffer alive caused Chromium to leave lower compositor
+    // tiles gray after completing a due-word run.
+    this.canvas.width = 1
+    this.canvas.height = 1
+  }
   resize() {
+    if (this.destroyed) return
     const rect = this.canvas.getBoundingClientRect()
     this.dpr = Math.min(2, window.devicePixelRatio || 1)
     this.width = Math.max(320, rect.width); this.height = Math.max(360, rect.height)
@@ -213,12 +227,16 @@ export class GameEngine {
   }
 
   private loop = (now: number) => {
+    if (this.destroyed) return
     const dt = Math.min(.05, (now - this.lastFrame) / 1000)
     this.lastFrame = now
     this.update(dt)
+    if (this.destroyed) return
     this.render()
     if (now - this.lastUiUpdate > 100) { this.emit(); this.lastUiUpdate = now }
-    this.frame = requestAnimationFrame(this.loop)
+    // A finished run is static. Keeping the canvas loop alive needlessly repaints
+    // underneath the result dialog and can starve the completion UI on large runs.
+    if (this.state.phase !== 'over') this.frame = requestAnimationFrame(this.loop)
   }
 
   private update(dt: number) {
@@ -265,7 +283,16 @@ export class GameEngine {
   private updateWave(dt: number) {
     if (this.spawned < this.waveTotal) {
       this.spawnTimer -= dt
-      if (this.spawnTimer <= 0) { this.spawn(); this.spawned += 1; this.spawnTimer = this.spawnInterval }
+      if (this.spawnTimer <= 0) {
+        if (this.liveMonsters().length < 5) {
+          // Chỉ spawn 1 lúc 1-2 từ (hiện tại spawn 1 để an toàn và k quá ngợp)
+          this.spawn()
+          this.spawned += 1
+          this.spawnTimer = this.spawnInterval
+        } else {
+          this.spawnTimer = 0 // Đợi tới khi có quái chết
+        }
+      }
     } else if (this.liveMonsters().length === 0) {
       this.interWaveDelay -= dt
       if (this.interWaveDelay <= 0) {
@@ -326,6 +353,7 @@ export class GameEngine {
   private finishGame(reason: 'completed' | 'breached' | 'ended') {
     if (this.state.phase === 'over') return
     this.state.phase = 'over'; this.state.endReason = reason
+    this.destroy()
     this.emit(true); this.callbacks.onGameOver(this.getSnapshot(), [...this.outcomes])
   }
 

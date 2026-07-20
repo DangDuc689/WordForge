@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import type { VocabularyItem } from '../domain/types'
+import { vocabularySenses } from '../domain/vocabulary'
 import { isAcceptedAnswer } from '../lib/normalize'
 import { isDue } from '../lib/srs'
 
@@ -68,13 +69,19 @@ export function NewStudyPage() {
       .filter((w): w is VocabularyItem => !!w)
   }, [learnSession?.queueIds, snapshot.vocabulary])
 
-  const word = queue[0]
+  const queuedWord = queue[0]
+  const word = useMemo(() => {
+    if (!queuedWord) return undefined
+    const senses = vocabularySenses(queuedWord)
+    const reps = snapshot.cards.find((card) => card.vocabularyId === queuedWord.id)?.reps ?? 0
+    return { ...queuedWord, ...senses[reps % senses.length], sourceKey: queuedWord.sourceKey }
+  }, [queuedWord, snapshot.cards])
 
   const choices = useMemo(() => {
     if (!word) return []
     const d = snapshot.vocabulary
       .filter(w => w.status === 'active' && w.id !== word.id)
-      .map(w => w.vietnamese)
+      .flatMap(w => vocabularySenses(w).map((sense) => sense.vietnamese))
       .filter(Boolean)
       .sort(() => Math.random() - 0.5)
       .slice(0, 3)
@@ -168,23 +175,37 @@ export function NewStudyPage() {
   }).length
 
   if (!word) {
+    const hasMoreToLearn = learnedCount < total
     return (
       <div className="page learn-page">
         <Stats total={total} learn={learnedCount} review={reviewCount} />
         <section className="learn-empty panel">
           <div>✓</div>
-          <h2>Hoàn thành lượt học!</h2>
-          <p>Bạn đã xử lý toàn bộ từ mới trong lượt này.</p>
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
-            <button 
-              className="button primary" 
-              disabled={busy || savingSession} 
-              onClick={() => void generateNextBatchAction()}
-            >
-              Học tiếp
-            </button>
-            <Link className="button ghost" to="/">Về tổng quan</Link>
-          </div>
+          {hasMoreToLearn ? (
+            <>
+              <h2>Hoàn thành lượt học!</h2>
+              <p>Bạn đã xử lý toàn bộ từ mới trong lượt này.</p>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+                <button
+                  className="button primary"
+                  disabled={busy || savingSession}
+                  onClick={() => void generateNextBatchAction()}
+                >
+                  Học tiếp
+                </button>
+                <Link className="button ghost" to="/">Về tổng quan</Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>Tuyệt vời! 🎉</h2>
+              <p>Bạn đã học hết toàn bộ từ mới trong bộ từ này rồi.</p>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+                <Link className="button primary" to="/study">Ôn tập từ vựng</Link>
+                <Link className="button ghost" to="/">Về tổng quan</Link>
+              </div>
+            </>
+          )}
         </section>
       </div>
     )
