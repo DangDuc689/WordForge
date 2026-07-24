@@ -6,7 +6,7 @@
 4. Set secrets:
 
 ```sh
-supabase secrets set GROQ_API_KEY=your_key GROQ_MODEL=openai/gpt-oss-20b
+supabase secrets set GEMINI_API_KEY=your_key GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-The browser only receives the publishable key. Groq credentials stay in Edge Function secrets.
+The browser only receives the publishable key. Gemini credentials stay in Edge Function secrets.

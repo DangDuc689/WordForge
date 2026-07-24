@@ -427,13 +427,33 @@ export class GameEngine {
   }
 
   private drawCore() {
-    const ctx = this.ctx, pulse = 1 + Math.sin(this.state.time * 2.4) * .05, radius = 34 * pulse
+    const ctx = this.ctx
+    const hpRatio = this.state.hp / this.state.maxHp
+    const isLowHp = hpRatio <= 0.35
+    const pulseSpeed = isLowHp ? 6 : 2.4
+    const pulse = 1 + Math.sin(this.state.time * pulseSpeed) * (isLowHp ? 0.12 : 0.05)
+    const radius = 34 * pulse
+
+    // Low HP Danger Pulse Aura
+    if (isLowHp) {
+      const dangerPulse = 1 + Math.sin(this.state.time * 8) * 0.15
+      const dangerGlow = ctx.createRadialGradient(this.centerX, this.centerY, radius * 0.5, this.centerX, this.centerY, radius * 4.5 * dangerPulse)
+      dangerGlow.addColorStop(0, 'rgba(239, 68, 68, 0.45)')
+      dangerGlow.addColorStop(0.5, 'rgba(239, 68, 68, 0.15)')
+      dangerGlow.addColorStop(1, 'rgba(239, 68, 68, 0)')
+      ctx.fillStyle = dangerGlow
+      ctx.beginPath()
+      ctx.arc(this.centerX, this.centerY, radius * 4.5 * dangerPulse, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    const glowColor = isLowHp ? 'rgba(239, 68, 68, 0.25)' : 'rgba(37, 99, 235, 0.18)'
     const glow = ctx.createRadialGradient(this.centerX, this.centerY, 2, this.centerX, this.centerY, radius * 3)
-    glow.addColorStop(0, 'rgba(37, 99, 235, 0.15)')
-    glow.addColorStop(.4, 'rgba(37, 99, 235, 0.05)')
+    glow.addColorStop(0, glowColor)
+    glow.addColorStop(.4, glowColor.replace(/0\.\d+/, '0.05'))
     glow.addColorStop(1, 'rgba(37, 99, 235, 0)')
     ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(this.centerX, this.centerY, radius * 3, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = this.state.hp / this.state.maxHp > .3 ? '#3b82f6' : '#ef4444'; ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2.5
+    ctx.fillStyle = hpRatio > .35 ? '#3b82f6' : '#ef4444'; ctx.strokeStyle = hpRatio > .35 ? '#2563eb' : '#dc2626'; ctx.lineWidth = 2.5
     ctx.beginPath()
     for (let index = 0; index < 8; index++) { const angle = index / 8 * Math.PI * 2 - Math.PI / 2, x = this.centerX + Math.cos(angle) * radius, y = this.centerY + Math.sin(angle) * radius; index ? ctx.lineTo(x, y) : ctx.moveTo(x, y) }
     ctx.closePath(); ctx.fill(); ctx.stroke()

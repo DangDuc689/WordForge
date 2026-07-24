@@ -43,7 +43,7 @@ interface AppValue {
   reviewWord: (input: ReviewInput) => Promise<void>
   recordGame: (run: Omit<GameRun, 'id' | 'userId' | 'createdAt'>, outcomes: GameOutcome[]) => Promise<void>
   updateProfile: (input: Partial<Pick<Profile, 'newWordsPerSession' | 'desiredRetention' | 'aiEnabled' | 'timezone'>>) => Promise<void>
-  savePractice: (deckId: string | null, format: 'reading' | 'quiz' | 'dialogue', targetIds: string[], content: AiPracticeSet, score?: number | null) => Promise<PracticeSession>
+  savePractice: (deckId: string | null, format: 'reading' | 'quiz' | 'dialogue' | 'dictation', targetIds: string[], content: AiPracticeSet, score?: number | null) => Promise<PracticeSession>
   updatePracticeSession: (session: PracticeSession) => Promise<void>
   exportBackup: () => void
   importBackup: (file: File) => Promise<void>
@@ -382,7 +382,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       async recordGame(runInput, outcomes) {
         const current = requireSnapshot()
         const run: GameRun = { ...runInput, id: crypto.randomUUID(), userId, createdAt: nowIso() }
-        await repository.addGameRun(run)
         const reviewResults = aggregateGameOutcomes(outcomes).flatMap((outcome) => {
           const card = current.cards.find((item) => item.vocabularyId === outcome.vocabularyId)
           if (!card || !isDue(card)) return []
@@ -394,10 +393,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             usedHint: outcome.usedHint,
           })]
         })
-        await Promise.all([
-          repository.saveCards(reviewResults.map((result) => result.card)),
-          repository.addReviews(reviewResults.map((result) => result.event)),
-        ])
+
+        try {
+          await repository.addGameRun(run)
+          await Promise.all([
+            repository.saveCards(reviewResults.map((result) => result.card)),
+            repository.addReviews(reviewResults.map((result) => result.event)),
+          ])
+        } catch (err) {
+          console.warn('Game persistence warning (cloud sync failed, updating local state):', err)
+        }
+
         setSnapshot((state) => state ? ({
           ...state,
           gameRuns: [run, ...state.gameRuns],

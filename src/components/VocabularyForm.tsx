@@ -3,6 +3,7 @@ import type { AiVocabularyDraft, CefrLevel, PartOfSpeech, VocabularyItem, Vocabu
 import { vocabularySenses } from '../domain/vocabulary'
 import { useApp } from '../context/AppContext'
 import { enrichVocabulary } from '../lib/ai'
+import { CloseIcon, PlusIcon, SparklesIcon } from './Icons'
 
 interface Props {
   word: VocabularyItem | null
@@ -34,7 +35,19 @@ export function VocabularyForm({ word, defaultDeckId, onClose }: Props) {
   const [aiBusy, setAiBusy] = useState(false)
   const [message, setMessage] = useState('')
 
-  useEffect(() => { document.body.classList.add('modal-open'); return () => document.body.classList.remove('modal-open') }, [])
+  useEffect(() => {
+    document.body.classList.add('modal-open')
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.classList.remove('modal-open')
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [busy, onClose])
 
   const update = <K extends keyof AiVocabularyDraft>(key: K, value: AiVocabularyDraft[K]) => setDraft((current) => ({ ...current, [key]: value }))
   const updateExtra = <K extends keyof VocabularySense>(index: number, key: K, value: VocabularySense[K]) => setExtraSenses((current) => current.map((sense, senseIndex) => senseIndex === index ? { ...sense, [key]: value } : sense))
@@ -47,7 +60,7 @@ export function VocabularyForm({ word, defaultDeckId, onClose }: Props) {
       const result = await enrichVocabulary(draft.english.trim(), deckId)
       setDraft(result)
       setAliases(result.acceptedAnswers.join(', '))
-      setMessage('AI đã tạo bản nháp. Hãy kiểm tra kỹ trước khi lưu.')
+      setMessage('AI đã hoàn thiện bản nháp. Hãy kiểm tra kỹ trước khi lưu.')
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Không thể gọi AI.')
     } finally { setAiBusy(false) }
@@ -107,51 +120,89 @@ export function VocabularyForm({ word, defaultDeckId, onClose }: Props) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="word-form-title">
-        <div className="modal-head"><span><small>{word ? 'Chỉnh sửa mục từ' : 'Thêm vào kho từ'}</small><h2 id="word-form-title">{word ? word.english : 'Từ vựng mới'}</h2></span><button className="icon-button" onClick={onClose} aria-label="Đóng">×</button></div>
+        <div className="modal-head">
+          <div>
+            <small className="modal-tag">{word ? 'Chỉnh sửa mục từ' : 'Thêm vào kho từ'}</small>
+            <h2 id="word-form-title">{word ? word.english : 'Từ vựng mới'}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Đóng cửa sổ">
+            <CloseIcon />
+          </button>
+        </div>
+
         <form onSubmit={submit} className="word-form">
           <div className="form-grid two">
             <label>Tiếng Anh<input required autoFocus value={draft.english} onChange={(event) => update('english', event.target.value)} placeholder="opportunity" /></label>
             <label>Nghĩa tiếng Việt<input required value={draft.vietnamese} onChange={(event) => update('vietnamese', event.target.value)} placeholder="cơ hội" /></label>
           </div>
+
           <div className="ai-strip">
-            <span><b>◇ AI enrichment</b><small>Dùng các từ bạn đã biết để tạo ví dụ dễ hiểu.</small></span>
-            <button type="button" className="button secondary" disabled={aiBusy || !snapshot.profile.aiEnabled} onClick={() => void askAi()}>{aiBusy ? 'Đang tạo…' : 'Hoàn thiện bằng AI'}</button>
+            <span>
+              <b className="ai-strip-title">
+                <SparklesIcon width="16" height="16" />
+                <span>AI Enhancement</span>
+              </b>
+              <small>Tự động tra IPA, ví dụ chuẩn và các từ đồng nghĩa.</small>
+            </span>
+            <button type="button" className="button secondary" disabled={aiBusy || !snapshot.profile.aiEnabled} onClick={() => void askAi()}>
+              <SparklesIcon width="14" height="14" />
+              <span>{aiBusy ? 'Đang phân tích…' : 'Hoàn thiện bằng AI'}</span>
+            </button>
           </div>
+
           <label>Đáp án khác được chấp nhận<input value={aliases} onChange={(event) => setAliases(event.target.value)} placeholder="Ngăn cách bằng dấu phẩy" /></label>
+
           <div className="form-grid four">
             <label>Bộ từ<select value={deckId} onChange={(event) => setDeckId(event.target.value)}>{snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label>
             <label>Loại từ<select value={draft.partOfSpeech} onChange={(event) => update('partOfSpeech', event.target.value as PartOfSpeech)}><option value="noun">Danh từ</option><option value="verb">Động từ</option><option value="adjective">Tính từ</option><option value="adverb">Trạng từ</option><option value="phrase">Cụm từ</option><option value="pronoun">Đại từ</option><option value="determiner">Từ hạn định</option><option value="preposition">Giới từ</option><option value="conjunction">Liên từ</option><option value="interjection">Thán từ</option><option value="numeral">Số từ</option><option value="modal">Động từ khuyết thiếu</option><option value="auxiliary">Trợ động từ</option><option value="infinitive-marker">Dấu hiệu nguyên mẫu</option><option value="other">Khác</option></select></label>
             <label>Tier<select value={draft.tier} onChange={(event) => update('tier', Number(event.target.value) as 1 | 2 | 3)}><option value="1">1 · Cơ bản</option><option value="2">2 · Phổ biến</option><option value="3">3 · Thử thách</option></select></label>
             <label>CEFR<select value={draft.cefr} onChange={(event) => update('cefr', event.target.value as CefrLevel)}><option value="">—</option>{['A1','A2','B1','B2','C1','C2'].map((level) => <option key={level}>{level}</option>)}</select></label>
           </div>
+
           <label>IPA<input value={draft.ipa} onChange={(event) => update('ipa', event.target.value)} placeholder="/ˌɒpəˈtjuːnəti/" /></label>
+          
           <div className="form-grid two">
             <label>Ví dụ tiếng Anh<textarea rows={3} value={draft.exampleEn} onChange={(event) => update('exampleEn', event.target.value)} /></label>
             <label>Dịch ví dụ<textarea rows={3} value={draft.exampleVi} onChange={(event) => update('exampleVi', event.target.value)} /></label>
           </div>
+          
           <label>Ghi chú<textarea rows={2} value={draft.notes} onChange={(event) => update('notes', event.target.value)} /></label>
+
           <div className="sense-editor">
-            <div className="section-title"><span><b>Các nghĩa khác</b><small>Mỗi nghĩa giữ riêng từ loại, IPA và ví dụ.</small></span><button type="button" className="button secondary" onClick={() => setExtraSenses((current) => [...current, blankSense()])}>+ Thêm nghĩa</button></div>
-            {extraSenses.map((sense, index) => <div className="panel" key={sense.sourceKey || index}>
-              <div className="form-grid two">
-                <label>Nghĩa tiếng Việt<input required value={sense.vietnamese} onChange={(event) => updateExtra(index, 'vietnamese', event.target.value)} /></label>
-                <label>Loại từ<select value={sense.partOfSpeech} onChange={(event) => updateExtra(index, 'partOfSpeech', event.target.value as PartOfSpeech)}><option value="noun">Danh từ</option><option value="verb">Động từ</option><option value="adjective">Tính từ</option><option value="adverb">Trạng từ</option><option value="phrase">Cụm từ</option><option value="pronoun">Đại từ</option><option value="determiner">Từ hạn định</option><option value="preposition">Giới từ</option><option value="conjunction">Liên từ</option><option value="interjection">Thán từ</option><option value="numeral">Số từ</option><option value="modal">Động từ khuyết thiếu</option><option value="auxiliary">Trợ động từ</option><option value="infinitive-marker">Dấu hiệu nguyên mẫu</option><option value="other">Khác</option></select></label>
+            <div className="section-title">
+              <span><b>Các nghĩa bổ sung</b><small>Mỗi nghĩa giữ riêng từ loại, IPA và ví dụ tương ứng.</small></span>
+              <button type="button" className="button secondary" onClick={() => setExtraSenses((current) => [...current, blankSense()])}>
+                <PlusIcon width="14" height="14" />
+                <span>Thêm nghĩa phụ</span>
+              </button>
+            </div>
+            
+            {extraSenses.map((sense, index) => (
+              <div className="panel sense-panel" key={sense.sourceKey || index}>
+                <div className="form-grid two">
+                  <label>Nghĩa tiếng Việt<input required value={sense.vietnamese} onChange={(event) => updateExtra(index, 'vietnamese', event.target.value)} /></label>
+                  <label>Loại từ<select value={sense.partOfSpeech} onChange={(event) => updateExtra(index, 'partOfSpeech', event.target.value as PartOfSpeech)}><option value="noun">Danh từ</option><option value="verb">Động từ</option><option value="adjective">Tính từ</option><option value="adverb">Trạng từ</option><option value="phrase">Cụm từ</option><option value="pronoun">Đại từ</option><option value="determiner">Từ hạn định</option><option value="preposition">Giới từ</option><option value="conjunction">Liên từ</option><option value="interjection">Thán từ</option><option value="numeral">Số từ</option><option value="modal">Động từ khuyết thiếu</option><option value="auxiliary">Trợ động từ</option><option value="infinitive-marker">Dấu hiệu nguyên mẫu</option><option value="other">Khác</option></select></label>
+                </div>
+                <div className="form-grid four">
+                  <label>Tier<select value={sense.tier} onChange={(event) => updateExtra(index, 'tier', Number(event.target.value) as 1 | 2 | 3)}><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+                  <label>CEFR<select value={sense.cefr} onChange={(event) => updateExtra(index, 'cefr', event.target.value as CefrLevel)}><option value="">—</option>{['A1','A2','B1','B2','C1','C2'].map((level) => <option key={level}>{level}</option>)}</select></label>
+                  <label>IPA<input value={sense.ipa} onChange={(event) => updateExtra(index, 'ipa', event.target.value)} /></label>
+                  <button type="button" className="button ghost danger-btn" onClick={() => setExtraSenses((current) => current.filter((_, senseIndex) => senseIndex !== index))}>Xóa nghĩa này</button>
+                </div>
+                <div className="form-grid two">
+                  <label>Ví dụ tiếng Anh<textarea rows={2} value={sense.exampleEn} onChange={(event) => updateExtra(index, 'exampleEn', event.target.value)} /></label>
+                  <label>Dịch ví dụ<textarea rows={2} value={sense.exampleVi} onChange={(event) => updateExtra(index, 'exampleVi', event.target.value)} /></label>
+                </div>
+                <label>Ghi chú<textarea rows={2} value={sense.notes} onChange={(event) => updateExtra(index, 'notes', event.target.value)} /></label>
               </div>
-              <div className="form-grid four">
-                <label>Tier<select value={sense.tier} onChange={(event) => updateExtra(index, 'tier', Number(event.target.value) as 1 | 2 | 3)}><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-                <label>CEFR<select value={sense.cefr} onChange={(event) => updateExtra(index, 'cefr', event.target.value as CefrLevel)}><option value="">—</option>{['A1','A2','B1','B2','C1','C2'].map((level) => <option key={level}>{level}</option>)}</select></label>
-                <label>IPA<input value={sense.ipa} onChange={(event) => updateExtra(index, 'ipa', event.target.value)} /></label>
-                <button type="button" className="button ghost" onClick={() => setExtraSenses((current) => current.filter((_, senseIndex) => senseIndex !== index))}>Xóa nghĩa</button>
-              </div>
-              <div className="form-grid two">
-                <label>Ví dụ tiếng Anh<textarea rows={2} value={sense.exampleEn} onChange={(event) => updateExtra(index, 'exampleEn', event.target.value)} /></label>
-                <label>Dịch ví dụ<textarea rows={2} value={sense.exampleVi} onChange={(event) => updateExtra(index, 'exampleVi', event.target.value)} /></label>
-              </div>
-              <label>Ghi chú<textarea rows={2} value={sense.notes} onChange={(event) => updateExtra(index, 'notes', event.target.value)} /></label>
-            </div>)}
+            ))}
           </div>
+
           {message && <div className="form-message">{message}</div>}
-          <div className="form-actions"><button type="button" className="button ghost" onClick={onClose}>Hủy</button><button className="button primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu mục từ'}</button></div>
+          <div className="form-actions">
+            <button type="button" className="button ghost" onClick={onClose}>Hủy</button>
+            <button className="button primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu Mục Từ'}</button>
+          </div>
         </form>
       </section>
     </div>

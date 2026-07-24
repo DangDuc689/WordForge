@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import type { VocabularyItem } from '../domain/types'
@@ -7,26 +7,39 @@ import { isAcceptedAnswer } from '../lib/normalize'
 import { isDue } from '../lib/srs'
 
 type Tab = 'flashcard' | 'meaning' | 'word' | 'example'
+
 const tabs = [
-  ['flashcard', '▱', 'Flashcard'],
-  ['meaning', '♧', 'Meaning'],
-  ['word', 'T', 'Word'],
-  ['example', '⌁', 'Example']
+  { id: 'flashcard', step: 1, label: 'Thẻ từ' },
+  { id: 'meaning', step: 2, label: 'Chọn nghĩa' },
+  { id: 'word', step: 3, label: 'Gõ từ Anh' },
+  { id: 'example', step: 4, label: 'Đặt câu' }
 ] as const
 
-const speak = (w: VocabularyItem) => {
-  if (!('speechSynthesis' in window)) return
-  const u = new SpeechSynthesisUtterance(w.english)
+function SpeakerIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`speaker-svg ${className}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+    </svg>
+  )
+}
+
+const speakText = (text: string) => {
+  if (!('speechSynthesis' in window) || !text) return
+  const u = new SpeechSynthesisUtterance(text)
   u.lang = 'en-US'
   speechSynthesis.cancel()
   speechSynthesis.speak(u)
 }
 
+const speak = (w: VocabularyItem) => speakText(w.english)
+
 const Stats = ({ total, learn, review }: { total: number; learn: number; review: number }) => (
   <div className="learn-stats">
-    <div className="learn-stat total"><strong>{total}</strong><span>TOTAL</span></div>
-    <div className="learn-stat learn"><strong>{learn}</strong><span>LEARNED</span></div>
-    <div className="learn-stat review"><strong>{review}</strong><span>TO REVIEW</span></div>
+    <div className="learn-stat total"><strong>{total}</strong><span>TỔNG SỐ TỪ</span></div>
+    <div className="learn-stat learn"><strong>{learn}</strong><span>ĐÃ HỌC</span></div>
+    <div className="learn-stat review"><strong>{review}</strong><span>CẦN ÔN LẠI</span></div>
   </div>
 )
 
@@ -140,18 +153,18 @@ export function NewStudyPage() {
       setCorrect(isOk)
       setChecked(true)
       if (isOk) {
-        setTimeout(() => handleNextTab(), 800)
+        setTimeout(() => handleNextTab(), 700)
       }
     }
   }
 
-  const checkMeaning = () => {
-    if (word && choice) {
-      const isOk = choice === word.vietnamese
+  const checkMeaning = (selectedChoice = choice) => {
+    if (word && selectedChoice) {
+      const isOk = selectedChoice === word.vietnamese
       setCorrect(isOk)
       setChecked(true)
       if (isOk) {
-        setTimeout(() => handleNextTab(), 800)
+        setTimeout(() => handleNextTab(), 700)
       }
     }
   }
@@ -164,6 +177,59 @@ export function NewStudyPage() {
       setChecked(true)
     }
   }
+
+  // Keyboard navigation shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+
+      if (tab === 'flashcard') {
+        if (!isInput && e.code === 'Space') {
+          e.preventDefault()
+          setIsFlipped(prev => !prev)
+        } else if (!isInput && e.key === 'Enter') {
+          e.preventDefault()
+          handleNextTab()
+        }
+      } else if (tab === 'meaning') {
+        if (!isInput && ['1', '2', '3', '4'].includes(e.key)) {
+          const idx = parseInt(e.key, 10) - 1
+          if (choices[idx] && !checked) {
+            e.preventDefault()
+            setChoice(choices[idx])
+            checkMeaning(choices[idx])
+          }
+        } else if (e.key === 'Enter') {
+          if (checked) {
+            e.preventDefault()
+            if (correct) handleNextTab()
+            else { setChecked(false); setChoice(''); }
+          }
+        }
+      } else if (tab === 'word') {
+        if (e.key === 'Enter' && checked) {
+          e.preventDefault()
+          if (correct) handleNextTab()
+          else setChecked(false)
+        }
+      } else if (tab === 'example') {
+        if (e.key === 'Enter') {
+          if (!checked && answer.trim()) {
+            e.preventDefault()
+            checkExample({ preventDefault: () => {} } as FormEvent)
+          } else if (checked) {
+            e.preventDefault()
+            if (correct) void nextWord(true)
+            else setChecked(false)
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [tab, isFlipped, choices, choice, checked, correct, word, answer])
   
   const total = snapshot.vocabulary.filter(w => w.status === 'active' && (deck === 'all' || w.deckId === deck)).length
   const learnedCount = snapshot.vocabulary.filter(w => w.status === 'active' && (deck === 'all' || w.deckId === deck) && snapshot.cards.some(c => c.vocabularyId === w.id)).length
@@ -180,7 +246,7 @@ export function NewStudyPage() {
       <div className="page learn-page">
         <Stats total={total} learn={learnedCount} review={reviewCount} />
         <section className="learn-empty panel">
-          <div>✓</div>
+          <div className="empty-check-icon">✓</div>
           {hasMoreToLearn ? (
             <>
               <h2>Hoàn thành lượt học!</h2>
@@ -191,15 +257,15 @@ export function NewStudyPage() {
                   disabled={busy || savingSession}
                   onClick={() => void generateNextBatchAction()}
                 >
-                  Học tiếp
+                  Học tiếp lượt mới
                 </button>
                 <Link className="button ghost" to="/">Về tổng quan</Link>
               </div>
             </>
           ) : (
             <>
-              <h2>Tuyệt vời! 🎉</h2>
-              <p>Bạn đã học hết toàn bộ từ mới trong bộ từ này rồi.</p>
+              <h2>Đã hoàn thành!</h2>
+              <p>Bạn đã học tất cả từ vựng trong bộ từ này.</p>
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
                 <Link className="button primary" to="/study">Ôn tập từ vựng</Link>
                 <Link className="button ghost" to="/">Về tổng quan</Link>
@@ -213,26 +279,40 @@ export function NewStudyPage() {
 
   const ipa = word.ipa || '/əˈveɪ.lə.bəl/'
   const example = word.exampleEn || `Is this ${word.english} in a different context?`
+  const activeStepIdx = tabs.findIndex(t => t.id === tab)
 
   return (
     <div className="page learn-page">
       <Stats total={total} learn={learnedCount} review={reviewCount} />
       
       <div className="learn-toolbar">
-        <div className="learn-tabs" role="tablist">
-          {tabs.map(([id, icon, label]) => (
-            <button 
-              key={id} 
-              className={tab === id ? 'active' : ''} 
-              disabled
-              role="tab" 
-              aria-selected={tab === id}
-            >
-              <i>{icon}</i>{label}
-            </button>
-          ))}
+        {/* Workflow Stepper Progress Indicator */}
+        <div className="learn-stepper" role="progressbar" aria-label="Tiến trình học từ vựng">
+          {tabs.map(({ id, step, label }, idx) => {
+            const isCurrent = tab === id
+            const isCompleted = idx < activeStepIdx
+            return (
+              <Fragment key={id}>
+                <div 
+                  className={`stepper-item ${isCurrent ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
+                >
+                  <div className="stepper-badge">
+                    {isCompleted ? '✓' : step}
+                  </div>
+                  <span className="stepper-label">
+                    <small className="step-name">{label}</small>
+                  </span>
+                </div>
+                {idx < tabs.length - 1 && (
+                  <div className={`stepper-line ${idx < activeStepIdx ? 'completed' : ''}`} />
+                )}
+              </Fragment>
+            )
+          })}
         </div>
+
         <select 
+          className="deck-select"
           value={deck} 
           disabled={busy || savingSession}
           onChange={e => { void changeLearnDeck(e.target.value === 'all' ? null : e.target.value) }}
@@ -243,61 +323,107 @@ export function NewStudyPage() {
       </div>
 
       {tab === 'flashcard' && (
-        <section 
-          className={`learn-card flashcard-learn ${isFlipped ? 'flipped' : ''}`}
-          onClick={() => !busy && !savingSession && setIsFlipped(!isFlipped)}
-          style={{ cursor: 'pointer', userSelect: 'none' }}
-        >
-          <span className="new-badge">✨ Từ mới</span>
-          
-          <div className="learn-word">
-            {!isFlipped ? (
-              <>
-                <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" disabled={busy || savingSession} onClick={(e) => { e.stopPropagation(); speak(word); }}>◖</button></h1>
-                <p>{ipa}</p>
-                <div style={{ marginTop: '20px', color: 'var(--faint)', fontSize: '0.9rem', fontWeight: 500 }}>Chạm để lật thẻ</div>
-              </>
-            ) : (
-              <>
-                <h1>{word.vietnamese}</h1>
-                <div style={{ marginTop: '20px', color: 'var(--faint)', fontSize: '0.9rem', fontWeight: 500 }}>Chạm để lật lại</div>
-              </>
-            )}
-          </div>
+        <div className="flashcard-container-3d">
+          <section 
+            className={`learn-card flashcard-3d ${isFlipped ? 'flipped' : ''}`}
+            onClick={() => !busy && !savingSession && setIsFlipped(!isFlipped)}
+            title="Nhấp chuột hoặc nhấn phím Space để lật thẻ"
+          >
+            <div className="flashcard-3d-inner">
+              {/* Mặt trước */}
+              <div className="flashcard-face flashcard-front">
+                <span className="new-badge">Từ mới</span>
+                
+                <div className="learn-word">
+                  <h1>
+                    {word.english} <em>({word.partOfSpeech})</em>{' '}
+                    <button 
+                      type="button" 
+                      className="speaker-btn"
+                      disabled={busy || savingSession} 
+                      onClick={(e) => { e.stopPropagation(); speak(word); }}
+                      title="Phát âm"
+                    >
+                      <SpeakerIcon />
+                    </button>
+                  </h1>
+                  <p className="ipa">{ipa}</p>
+                </div>
 
-          <div className="learn-card-actions" onClick={e => e.stopPropagation()}>
-            <button className="button ghost" disabled={busy || savingSession} onClick={skipWord}>Để sau</button>
-            <button className="mastered-button" disabled={busy || savingSession} onClick={() => void nextWord(true, '')}>Mastered</button>
-            <button className="next-button" disabled={busy || savingSession} onClick={() => handleNextTab()}>Next&nbsp; →</button>
+                <div className="flip-hint">
+                  Chạm hoặc nhấn <kbd>Space</kbd> để xem nghĩa
+                </div>
+              </div>
+
+              {/* Mặt sau */}
+              <div className="flashcard-face flashcard-back">
+                <span className="new-badge vi-badge">Nghĩa tiếng Việt</span>
+                
+                <div className="learn-word">
+                  <h1 className="vietnamese-title">{word.vietnamese}</h1>
+                  {word.exampleEn && (
+                    <blockquote className="flashcard-example">
+                      <p>“{word.exampleEn}”</p>
+                      {word.exampleVi && <small>{word.exampleVi}</small>}
+                    </blockquote>
+                  )}
+                </div>
+
+                <div className="flip-hint">
+                  Chạm hoặc nhấn <kbd>Space</kbd> để lật lại
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* External Card Actions to avoid misclicks */}
+          <div className="learn-card-external-actions">
+            <button className="button ghost defer-btn" disabled={busy || savingSession} onClick={skipWord}>
+              Để sau
+            </button>
+            <button className="button mastered-btn" disabled={busy || savingSession} onClick={() => void nextWord(true, '')}>
+              Đã thuộc
+            </button>
+            <button className="button next-step-btn" disabled={busy || savingSession} onClick={() => handleNextTab()}>
+              Tiếp tục
+            </button>
           </div>
-        </section>
+        </div>
       )}
 
       {tab === 'meaning' && (
         <section className="learn-card meaning-learn">
-          <div className="question-heading">🧠 &nbsp;WHAT DOES THIS MEAN?</div>
-          <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" disabled={busy || savingSession} onClick={() => speak(word)}>◖</button></h1>
+          <div className="question-heading">CHỌN NGHĨA ĐÚNG</div>
+          <h1>
+            {word.english} <em>({word.partOfSpeech})</em>{' '}
+            <button type="button" className="speaker-btn" disabled={busy || savingSession} onClick={() => speak(word)} title="Nghe phát âm">
+              <SpeakerIcon />
+            </button>
+          </h1>
           
           <div className="meaning-choices">
-            {choices.map(c => (
+            {choices.map((c, idx) => (
               <button 
                 key={c} 
                 className={`${choice === c ? 'selected ' : ''}${checked && c === word.vietnamese ? 'answer-correct ' : ''}${checked && choice === c && c !== word.vietnamese ? 'answer-wrong' : ''}`} 
                 disabled={checked || busy || savingSession} 
-                onClick={() => setChoice(c)}
+                onClick={() => { setChoice(c); checkMeaning(c); }}
               >
-                <span />{c}
+                <span className="choice-num">{idx + 1}</span>
+                <span className="choice-label">{c}</span>
               </button>
             ))}
           </div>
 
           {!checked ? (
-            <button className="learn-check" disabled={!choice || busy || savingSession} onClick={checkMeaning}>Check</button>
+            <button className="learn-check" disabled={!choice || busy || savingSession} onClick={() => checkMeaning()}>
+              Kiểm tra
+            </button>
           ) : (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
-              {correct ? 'Chính xác! 🎉' : 'Chưa chính xác, hãy chọn lại nhé.'}
+              <span>{correct ? 'Chính xác!' : 'Chưa đúng, hãy chọn lại.'}</span>
               <button disabled={busy || savingSession} onClick={() => correct ? handleNextTab() : (setChecked(false), setChoice(''))}>
-                {correct ? 'Next →' : 'Thử lại'}
+                {correct ? 'Tiếp tục →' : 'Thử lại'}
               </button>
             </div>
           )}
@@ -306,8 +432,8 @@ export function NewStudyPage() {
 
       {tab === 'word' && (
         <section className="learn-card word-learn">
-          <div className="question-heading">📕 &nbsp;WHICH ENGLISH WORD?</div>
-          <h1>“{word.vietnamese}”</h1>
+          <div className="question-heading">NHẬP TỪ TIẾNG ANH TƯƠNG ỨNG</div>
+          <h1 className="vi-prompt">“{word.vietnamese}”</h1>
           
           <form onSubmit={checkWord} className="word-answer-form">
             <input 
@@ -319,16 +445,34 @@ export function NewStudyPage() {
               spellCheck={false}
               disabled={checked || busy || savingSession}
             />
-            <button type="button" className="hint-button" disabled={busy || savingSession || checked} onClick={() => { setHint(true); setAnswer(word.english) }}>💡</button>
-            <button type="button" className="mic-button" disabled={busy || savingSession} onClick={() => speak(word)}>♩</button>
-            <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession}>Check</button>
+            <button 
+              type="button" 
+              className="hint-button-text" 
+              disabled={busy || savingSession || checked} 
+              onClick={() => { setHint(true); setAnswer(word.english) }}
+              title="Xem gợi ý"
+            >
+              Gợi ý
+            </button>
+            <button 
+              type="button" 
+              className="speaker-button-icon" 
+              disabled={busy || savingSession} 
+              onClick={() => speak(word)}
+              title="Nghe phát âm"
+            >
+              <SpeakerIcon />
+            </button>
+            <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession}>
+              Kiểm tra
+            </button>
           </form>
 
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
-              {correct ? 'Chính xác! 🎉' : 'Chưa chính xác, hãy nhập lại nhé.'}
+              <span>{correct ? 'Chính xác!' : `Chưa đúng. Đáp án đúng: "${word.english}"`}</span>
               <button disabled={busy || savingSession} onClick={() => correct ? handleNextTab() : setChecked(false)}>
-                {correct ? 'Next →' : 'Thử lại'}
+                {correct ? 'Tiếp tục →' : 'Thử lại'}
               </button>
             </div>
           )}
@@ -337,39 +481,67 @@ export function NewStudyPage() {
 
       {tab === 'example' && (
         <section className="learn-card example-learn">
-          <div className="question-heading">📝 &nbsp;MAKE A SENTENCE WITH THIS WORD</div>
-          <h1>{word.english} <em>({word.partOfSpeech})</em> <button type="button" disabled={busy || savingSession} onClick={() => speak(word)}>◖</button></h1>
+          <div className="question-heading">ĐẶT CÂU VỚI TỪ VỰNG</div>
+          <h1>
+            {word.english} <em>({word.partOfSpeech})</em>{' '}
+            <button type="button" className="speaker-btn" disabled={busy || savingSession} onClick={() => speak(word)} title="Nghe phát âm">
+              <SpeakerIcon />
+            </button>
+          </h1>
           
-          <div className="example-meaning">{word.vietnamese} <span>{ipa}</span></div>
+          <div className="example-meaning">
+            {word.vietnamese} <span>{ipa}</span>
+          </div>
           
           <div 
             className="example-hint" 
             onClick={() => !busy && !savingSession && word.exampleVi && setShowVi(v => !v)}
             style={word.exampleVi ? { cursor: 'pointer' } : undefined}
           >
-            <b>📖 Gợi ý {word.exampleVi && <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--faint)', marginLeft: '0.5rem' }}>(Chạm để xem nghĩa)</span>}</b>
+            <b>Ví dụ mẫu {word.exampleVi && <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--faint)', marginLeft: '0.5rem' }}>(Chạm để xem dịch)</span>}</b>
             <p>{example}</p>
-            {showVi && word.exampleVi && <p style={{ color: 'var(--faint)', fontSize: '0.9rem', marginTop: '0.5rem' }}>{word.exampleVi}</p>}
-            <button type="button" disabled={busy || savingSession} onClick={(e) => { e.stopPropagation(); speak(word); }}>◖</button>
+            {showVi && word.exampleVi && <p className="vi-subtext">{word.exampleVi}</p>}
+            <button type="button" className="speaker-btn-small" disabled={busy || savingSession} onClick={(e) => { e.stopPropagation(); speakText(example); }} title="Nghe câu ví dụ">
+              <SpeakerIcon />
+            </button>
           </div>
 
           <form onSubmit={checkExample}>
             <textarea 
               value={answer} 
               onChange={e => setAnswer(e.target.value)} 
-              placeholder="Write an English sentence (AI graded) or copy the example above…"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (!checked && answer.trim()) {
+                    checkExample({ preventDefault: () => {} } as FormEvent)
+                  } else if (checked) {
+                    if (correct) void nextWord(true)
+                    else setChecked(false)
+                  }
+                }
+              }}
+              placeholder="Viết một câu tiếng Anh có chứa từ vựng trên..."
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               disabled={checked || busy || savingSession}
             />
             
             <div className="example-actions">
-              <button type="button" className="ai-grade" disabled={!answer.trim() || checked || busy || savingSession} onClick={() => checkExample({ preventDefault: () => {} } as FormEvent)}>🤖 Grade with AI</button>
-              <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession}>Check</button>
+              <button type="button" className="ai-grade" disabled={!answer.trim() || checked || busy || savingSession} onClick={() => checkExample({ preventDefault: () => {} } as FormEvent)}>
+                Đánh giá AI
+              </button>
+              <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession}>
+                Kiểm tra câu
+              </button>
             </div>
           </form>
 
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
-              {correct ? 'Câu trả lời tốt! 🎉' : 'Hãy thử dùng đúng từ vựng trong câu.'}
+              <span>{correct ? 'Hoàn thành từ vựng này!' : 'Hãy đảm bảo bạn đã dùng đúng từ vựng trong câu.'}</span>
               <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : setChecked(false)}>
                 {correct ? 'Hoàn thành →' : 'Thử lại'}
               </button>
@@ -380,3 +552,5 @@ export function NewStudyPage() {
     </div>
   )
 }
+
+

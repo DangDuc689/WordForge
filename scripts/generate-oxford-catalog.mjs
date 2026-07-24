@@ -5,9 +5,9 @@ const LEVELS = ['A1', 'A2', 'B1', 'B2']
 const SOURCE_URL = 'https://www.oxfordlearnersdictionaries.com/external/pdf/wordlists/oxford-3000-5000/American_Oxford_3000_by_CEFR_level.pdf'
 const CATALOG_VERSION = 'oxford-3000-us-v2'
 const DEFAULT_OUTPUT = 'public/catalog/oxford-3000-us/v2'
-const DEFAULT_MODEL = 'openai/gpt-oss-20b'
-const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
-const DEFAULT_REQUEST_INTERVAL_MS = 23_000
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+const DEFAULT_REQUEST_INTERVAL_MS = 2_000
 
 const tokenPattern = '(?:modal v\\.|auxiliary v\\.|infinitive marker|indefinite article|definite article|number|n\\.|v\\.|v|adj\\.|adv\\.|prep\\.|pron\\.|det\\.|conj\\.|exclam\\.)'
 const labelsPattern = new RegExp(`\\s+(${tokenPattern}(?:(?:\\s*,\\s*|\\s*\\/\\s*)${tokenPattern})*)$`)
@@ -105,7 +105,7 @@ function parseSource(text) {
   return entries
 }
 
-async function callGroq(batch, apiKey, model) {
+async function callGemini(batch, apiKey, model) {
   const requested = batch.map(({ sourceKey, english, partOfSpeech, cefr, senseHint, seedAliases }) => ({ sourceKey, english, partOfSpeech, cefr, senseHint, seedAliases }))
   const prompt = `Bạn đang biên soạn flashcard tiếng Anh cho người Việt luyện TOEIC. Với từng mục đầu vào, hãy tự viết nội dung, không chép định nghĩa hoặc câu ví dụ của Oxford hay từ điển khác. Dùng tiếng Anh-Mỹ và ví dụ công việc/đời sống phù hợp TOEIC khi tự nhiên. Nghĩa Việt phải ngắn, đúng từ loại và đúng senseHint. IPA là IPA Mỹ trong dấu /. acceptedAnswers chỉ gồm chính tả Anh-Anh hoặc dạng song song có trong seedAliases, tuyệt đối không thêm từ đồng nghĩa. Trả đủ đúng một kết quả cho mỗi sourceKey. notes chỉ ghi chú phân biệt nghĩa thật sự cần thiết. Đầu vào: ${JSON.stringify(requested)}`
   const itemSchema = {
@@ -118,7 +118,7 @@ async function callGroq(batch, apiKey, model) {
     required: ['sourceKey', 'vietnamese', 'ipa', 'exampleEn', 'exampleVi', 'acceptedAnswers', 'notes'],
     additionalProperties: false,
   }
-  const response = await fetch(GROQ_ENDPOINT, {
+  const response = await fetch(GEMINI_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -140,20 +140,21 @@ async function callGroq(batch, apiKey, model) {
           },
         },
       },
+      max_tokens: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || 16384),
       reasoning_effort: 'low',
     }),
   })
   if (!response.ok) {
-    const error = new Error(`Groq HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`)
+    const error = new Error(`Gemini HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`)
     const retryAfterSeconds = Number(response.headers.get('retry-after'))
     if (response.status === 429 && Number.isFinite(retryAfterSeconds)) error.retryAfterMs = retryAfterSeconds * 1_000
     throw error
   }
   const payload = await response.json()
   const content = payload.choices?.[0]?.message?.content
-  if (!content) throw new Error('Groq không trả nội dung.')
+  if (!content) throw new Error('Gemini không trả nội dung.')
   const parsed = JSON.parse(content)
-  if (!Array.isArray(parsed.items)) throw new Error('Groq trả JSON thiếu trường items.')
+  if (!Array.isArray(parsed.items)) throw new Error('Gemini trả JSON thiếu trường items.')
   return parsed.items
 }
 async function withRetry(action) {
@@ -172,7 +173,7 @@ async function withRetry(action) {
 }
 
 function validateEnrichment(sourceBatch, results) {
-  if (!Array.isArray(results) || results.length !== sourceBatch.length) throw new Error('Groq trả sai số lượng mục.')
+  if (!Array.isArray(results) || results.length !== sourceBatch.length) throw new Error('Gemini trả sai số lượng mục.')
   const resultMap = new Map(results.map((item) => [item.sourceKey, item]))
   return sourceBatch.map((source) => {
     const result = resultMap.get(source.sourceKey)
@@ -207,31 +208,31 @@ async function main() {
   console.log(`Đã phân tích ${sourceEntries.length} nghĩa: ${JSON.stringify(parsedCounts)}; ${Object.values(counts).reduce((sum, count) => sum + count, 0)} headword.`)
   if (process.argv.includes('--parse-only')) return
 
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey) throw new Error('Thiếu GROQ_API_KEY. Khóa chỉ cần cho bước sinh catalog và không được dùng biến VITE_*.')
-  const model = process.env.GROQ_MODEL || DEFAULT_MODEL
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('Thiếu GEMINI_API_KEY. Khóa chỉ cần cho bước sinh catalog và không được dùng biến VITE_*.')
+  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL
   const progressPath = resolve(outputRoot, '.generation-progress.json')
   let progress = {}
   try { progress = JSON.parse(await readFile(progressPath, 'utf8')) } catch { /* first run */ }
   const batchSize = 20
-  const requestIntervalMs = Number(process.env.GROQ_REQUEST_INTERVAL_MS ?? DEFAULT_REQUEST_INTERVAL_MS)
-  if (!Number.isFinite(requestIntervalMs) || requestIntervalMs < 0) throw new Error('GROQ_REQUEST_INTERVAL_MS phải là số không âm.')
+  const requestIntervalMs = Number(process.env.GEMINI_REQUEST_INTERVAL_MS ?? DEFAULT_REQUEST_INTERVAL_MS)
+  if (!Number.isFinite(requestIntervalMs) || requestIntervalMs < 0) throw new Error('GEMINI_REQUEST_INTERVAL_MS phải là số không âm.')
   let lastRequestAt = 0
-  const rateLimitedGroqCall = async (batch) => {
+  const rateLimitedGeminiCall = async (batch) => {
     const waitMs = Math.max(0, requestIntervalMs - (Date.now() - lastRequestAt))
     if (waitMs) {
-      console.log(`Đợi ${Math.ceil(waitMs / 1_000)} giây để giữ giới hạn Groq TPM...`)
+      console.log(`Đợi ${Math.ceil(waitMs / 1_000)} giây để giữ giới hạn Gemini TPM...`)
       await sleep(waitMs)
     }
     lastRequestAt = Date.now()
-    return callGroq(batch, apiKey, model)
+    return callGemini(batch, apiKey, model)
   }
 
   for (let offset = 0; offset < sourceEntries.length; offset += batchSize) {
     const batch = sourceEntries.slice(offset, offset + batchSize)
     const missing = batch.filter((entry) => !progress[entry.sourceKey])
     if (missing.length) {
-      const results = await withRetry(() => rateLimitedGroqCall(missing))
+      const results = await withRetry(() => rateLimitedGeminiCall(missing))
       const validated = validateEnrichment(missing, results)
       for (const entry of validated) progress[entry.sourceKey] = entry
       await writeJsonAtomic(progressPath, progress)

@@ -18,7 +18,7 @@ const vocabularyDraftSchema = z.object({
 
 const practiceSetSchema = z.object({
   title: z.string().min(1),
-  format: z.enum(['reading', 'quiz', 'dialogue']),
+  format: z.enum(['reading', 'quiz', 'dialogue', 'dictation']),
   passage: z.string().default(''),
   passageVi: z.string().default(''),
   questions: z.array(z.object({
@@ -28,7 +28,14 @@ const practiceSetSchema = z.object({
     choices: z.array(z.string()).min(2),
     answer: z.string(),
     explanation: z.string(),
-  })).min(1),
+  })).default([]),
+  dictations: z.array(z.object({
+    id: z.string(),
+    sentence: z.string(),
+    translationVi: z.string(),
+    vocabularyId: z.string().nullable().optional(),
+    hint: z.string().optional(),
+  })).optional(),
   glossary: z.array(z.object({
     vocabularyId: z.string(),
     english: z.string(),
@@ -62,5 +69,5 @@ async function invoke<T>(functionName: string, body: Record<string, unknown>, sc
 export const enrichVocabulary = (term: string, deckId: string): Promise<AiVocabularyDraft> =>
   invoke('ai-enrich-vocabulary', { term, deckId }, vocabularyDraftSchema)
 
-export const generatePractice = (deckId: string | null, format: 'reading' | 'dialogue'): Promise<AiPracticeSet> =>
+export const generatePractice = (deckId: string | null, format: 'reading' | 'dialogue' | 'dictation'): Promise<AiPracticeSet> =>
   invoke('ai-generate-practice', { deckId, format }, practiceSetSchema)

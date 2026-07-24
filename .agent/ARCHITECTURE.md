@@ -8,8 +8,8 @@
 
 AG Kit is a modular system consisting of:
 
-- **20 Specialist Agents** - Role-based AI personas (1 major upgrade in 2026.5.13)
-- **45 Skills** - Domain-specific knowledge modules with conditional loading
+- **21 Specialist Agents** - Role-based AI personas (1 major upgrade in 2026.5.13)
+- **46 Skills** - Domain-specific knowledge modules with conditional loading
 - **14 Workflows** - Slash command procedures
 
 ---
@@ -19,8 +19,8 @@ AG Kit is a modular system consisting of:
 ```plaintext
 .agent/
 ├── ARCHITECTURE.md          # This file
-├── agents/                  # 20 Specialist Agents
-├── skills/                  # 45 Skills (with conditional loading)
+├── agents/                  # 21 Specialist Agents
+├── skills/                  # 46 Skills (with conditional loading)
 ├── workflows/               # 14 Slash Commands
 ├── rules/                   # Global Rules
 ├── memory/                  # Persistent Memory (2026.5.13)
@@ -29,7 +29,7 @@ AG Kit is a modular system consisting of:
 
 ---
 
-## 🤖 Agents (20)
+## 🤖 Agents (21)
 
 Specialist AI personas for different domains.
 
@@ -55,10 +55,11 @@ Specialist AI personas for different domains.
 | `qa-automation-engineer` | E2E testing, CI pipelines  | webapp-testing, testing-patterns                         |
 | `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist                        |
 | `explorer-agent`         | Codebase analysis          | -                                                        |
+| `ui-ux-designer`         | Design review, Usability   | clean-code, web-design-guidelines, frontend-design, ui-ux-designer |
 
 ---
 
-## 🧩 Skills (45)
+## 🧩 Skills (46)
 
 Modular knowledge domains that agents can load on-demand based on task context. Each skill has a `when_to_use` frontmatter field for conditional/intelligent loading.
 
@@ -71,6 +72,7 @@ Modular knowledge domains that agents can load on-demand based on task context. 
 | `tailwind-patterns`     | Tailwind CSS v4 utilities                                             |
 | `frontend-design`       | UI/UX patterns, design systems                                        |
 | `ui-ux-pro-max`         | 50 styles, 21 palettes, 50 fonts                                      |
+| `ui-ux-designer`        | Usability research, WCAG 2.2 accessibility, AI prompt UI guidelines     |
 
 ### Backend & API
 

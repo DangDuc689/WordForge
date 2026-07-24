@@ -32,7 +32,7 @@ export function buildGamePool(
     .map((word) => {
       const card = cardMap.get(word.id)
       const senses = vocabularySenses(word)
-      const sense = senses[(card?.reps ?? 0) % senses.length]
+      const sense = senses[0] ?? { vietnamese: word.vietnamese, partOfSpeech: word.partOfSpeech, tier: word.tier }
       return {
         id: word.id,
         english: word.english,

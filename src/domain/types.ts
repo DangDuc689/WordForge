@@ -141,11 +141,19 @@ export interface GameRun {
   createdAt: string
 }
 
+export interface DictationItem {
+  id: string
+  sentence: string
+  translationVi: string
+  vocabularyId?: string | null
+  hint?: string
+}
+
 export interface PracticeSession {
   id: string
   userId: string
   deckId: string | null
-  format: 'reading' | 'quiz' | 'dialogue'
+  format: 'reading' | 'quiz' | 'dialogue' | 'dictation'
   targetVocabularyIds: string[]
   content: AiPracticeSet
   score: number | null
@@ -178,10 +186,11 @@ export interface AiPracticeQuestion {
 
 export interface AiPracticeSet {
   title: string
-  format: 'reading' | 'quiz' | 'dialogue'
+  format: 'reading' | 'quiz' | 'dialogue' | 'dictation'
   passage: string
   passageVi: string
   questions: AiPracticeQuestion[]
+  dictations?: DictationItem[]
   glossary: { vocabularyId: string; english: string; vietnamese: string }[]
 }
 

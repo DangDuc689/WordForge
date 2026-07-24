@@ -257,7 +257,11 @@ export class CloudRepository implements AppRepository {
   }
   async addGameRun(run: GameRun) { await upsertCloud('game_runs', run as unknown as Record<string, unknown>) }
   async savePracticeSession(session: PracticeSession) {
-    await upsertCloud('practice_sessions', session as unknown as Record<string, unknown>)
+    try {
+      await upsertCloud('practice_sessions', session as unknown as Record<string, unknown>)
+    } catch (err) {
+      console.warn('Lưu practice_session lên cloud thất bại:', err)
+    }
   }
   async restore(snapshot: AppSnapshot) {
     snapshot = deduplicateSnapshot(snapshot).snapshot

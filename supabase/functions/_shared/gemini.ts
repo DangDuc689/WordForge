@@ -10,16 +10,18 @@ export async function requireUser(request: Request) {
   return { client, user: data.user }
 }
 
-export async function callGroq(prompt: string, schema: Record<string, unknown>) {
-  const key = Deno.env.get('GROQ_API_KEY')
-  if (!key) throw new Error('Chưa cấu hình GROQ_API_KEY trong Supabase secrets.')
-  const model = Deno.env.get('GROQ_MODEL') || 'openai/gpt-oss-20b'
+export async function callGemini(prompt: string, schema: Record<string, unknown>) {
+  const key = Deno.env.get('GEMINI_API_KEY')
+  if (!key) throw new Error('Chưa cấu hình GEMINI_API_KEY trong Supabase secrets.')
+  const model = Deno.env.get('GEMINI_MODEL') || 'gemini-3.5-flash-lite'
 
   // Convert schema format to standard JSON schema (lowercase types) to guide the model
   const schemaStr = JSON.stringify(schema).replace(/"(STRING|INTEGER|NUMBER|BOOLEAN|ARRAY|OBJECT|NULL)"/g, (match) => match.toLowerCase())
   const fullPrompt = `${prompt}\n\nIMPORTANT: You MUST return ONLY valid JSON. The JSON must strictly match the following JSON Schema:\n\n${schemaStr}`
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -34,17 +36,19 @@ export async function callGroq(prompt: string, schema: Record<string, unknown>) 
         },
         { role: 'user', content: fullPrompt }
       ],
-      temperature: 0.35,
+      // Gemini 3.5 Flash-Lite supports up to 65,536 output tokens.
+      // Keep this configurable while leaving enough headroom for structured JSON.
+      max_tokens: Number(Deno.env.get('GEMINI_MAX_OUTPUT_TOKENS') || 16384),
       response_format: { type: 'json_object' }
     }),
   })
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Groq trả về HTTP ${response.status}: ${errorText}`)
+    throw new Error(`Gemini API HTTP ${response.status}: ${errorText}`)
   }
   const payload = await response.json()
   const text = payload.choices?.[0]?.message?.content
-  if (!text) throw new Error('Groq không trả về nội dung.')
+  if (!text) throw new Error('Gemini API không trả về nội dung.')
   
   let cleanText = text.trim()
   if (cleanText.startsWith('```')) {

@@ -40,6 +40,7 @@ graph TD
 | ------------------- | ------------------------------------------ | ------------------------------------------- | ------------ |
 | **Authentication**  | "login", "auth", "signup", "password"      | `security-auditor` + `backend-specialist`   | ✅ YES       |
 | **UI Component**    | "button", "card", "layout", "style"        | `frontend-specialist`                       | ✅ YES       |
+| **UI/UX Audit**     | "design", "aesthetic", "usability", "contrast", "accessibility", "palette" | `ui-ux-designer` | ✅ YES       |
 | **Mobile UI**       | "screen", "navigation", "touch", "gesture" | `mobile-developer`                          | ✅ YES       |
 | **API Endpoint**    | "endpoint", "route", "API", "POST", "GET"  | `backend-specialist`                        | ✅ YES       |
 | **Database**        | "schema", "migration", "query", "table"    | `database-architect` + `backend-specialist` | ✅ YES       |

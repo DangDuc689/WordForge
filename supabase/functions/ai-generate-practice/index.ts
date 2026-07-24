@@ -1,4 +1,4 @@
-import { callGroq, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
+import { callGemini, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
 
 const schema = {
   type: 'OBJECT', properties: {
@@ -32,8 +32,8 @@ Deno.serve(async (request) => {
       learnedWords = data ?? []
     }
 
-    // 3. Fetch up to 200 active vocabulary items for background words
-    const wordQuery = client.from('vocabulary_items').select('id,english,vietnamese,example_en,part_of_speech').eq('user_id', user.id).eq('status', 'active').limit(200)
+    // 3. Fetch up to 500 active vocabulary items for background words
+    const wordQuery = client.from('vocabulary_items').select('id,english,vietnamese,example_en,part_of_speech').eq('user_id', user.id).eq('status', 'active').limit(500)
     const { data: words, error: wordsError } = deckId ? await wordQuery.eq('deck_id', deckId) : await wordQuery
     if (wordsError) throw wordsError
     
@@ -67,20 +67,24 @@ Deno.serve(async (request) => {
       }
     }
 
-    const targetGlossary = targets.slice(0, 8)
-    const known = (words ?? []).filter((word) => !targetGlossary.some((target) => target.id === word.id)).slice(0, 80)
+    const targetGlossary = targets.slice(0, 10)
+    const known = (words ?? []).filter((word) => !targetGlossary.some((target) => target.id === word.id)).slice(0, 200)
     
     if (targetGlossary.length < 3) {
       throw new Error('Bạn cần học ít nhất 3 từ trước khi sử dụng tính năng luyện tập AI.')
     }
 
     const requestedFormat = format === 'dialogue' ? 'dialogue' : 'reading'
-    const prompt = `Tạo một bài luyện tiếng Anh cho người Việt A1-B1 bằng JSON. format=${requestedFormat}. Dùng bắt buộc các từ mục tiêu và viết câu tự nhiên, không bịa nghĩa. ${requestedFormat === 'reading' ? 'Tạo passage 90-130 từ, bản dịch Việt và 3 câu hỏi đọc hiểu.' : 'Tạo hội thoại 8-12 lượt nói ngắn. QUAN TRỌNG: mỗi lượt nói trong "passage" bắt buộc phải bắt đầu bằng nhãn "A: " hoặc "B: " và kết thúc bằng một dấu xuống dòng \\n để mỗi lượt nói nằm trên một dòng riêng biệt (Ví dụ: "A: Hello!\\nB: Hi there!\\n"). Bản dịch trong "passageVi" cũng phải được chia dòng tương ứng tương tự bằng dấu xuống dòng \\n.'} Mỗi question phải có vocabularyId đúng với một id mục tiêu hoặc null. Từ mục tiêu: ${JSON.stringify(targetGlossary.map(t => ({id: t.id, english: t.english, vietnamese: t.vietnamese}))) }. Từ đã biết để làm nền: ${JSON.stringify(known.map(k => k.english))}`
+    const formatInstructions = requestedFormat === 'dialogue'
+      ? 'Create a 10-16 turn dialogue in English only. Each line must start with A: or B:. Create exactly 4 comprehension questions about events, people, intentions, reasons, times, details, or likely next actions. Every prompt, choice, answer, and explanation MUST be in English. Answers must be directly supported by the dialogue. Never ask about vocabulary meaning, translation, spelling, part of speech, definitions, or target words. For dialogue questions, vocabularyId MUST be null.'
+      : 'Create a 120-200 word English passage, Vietnamese translation, and 3-4 reading-comprehension questions.'
+    const prompt = `Create an A1-B1 English practice set as JSON. format=${requestedFormat}. ${formatInstructions} Use target words naturally; do not force vocabulary questions. Target words: ${JSON.stringify(targetGlossary.map(t => ({id: t.id, english: t.english, vietnamese: t.vietnamese})))}. Known words: ${JSON.stringify(known.map(k => k.english))}`
     
-    const result = await callGroq(prompt, schema)
+    const result = await callGemini(prompt, schema)
     
     const validTargetIds = new Set(targetGlossary.map((t) => t.id))
-    const questions = (Array.isArray(result.questions) ? result.questions : []).slice(0, 3).map((q: any) => {
+    const questions = (Array.isArray(result.questions) ? result.questions : []).slice(0, requestedFormat === 'dialogue' ? 4 : 3).map((q: any) => {
+      if (requestedFormat === 'dialogue') return { ...q, vocabularyId: null }
       if (q.vocabularyId && !validTargetIds.has(q.vocabularyId)) {
         const mapped = targetGlossary.find(t => q.prompt?.includes(t.english) || q.answer?.includes(t.english) || q.explanation?.includes(t.english))
         return { ...q, vocabularyId: mapped ? mapped.id : null }
