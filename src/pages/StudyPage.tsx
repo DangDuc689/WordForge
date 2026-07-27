@@ -69,46 +69,156 @@ function MemoryLevelList({
   onDecrement, 
   onReset,
   adjustingId,
+  onClose,
 }: { 
   level: number, 
   words: (VocabularyItem & { dueAt: string })[], 
   onDecrement: (id: string) => void,
   onReset: (id: string) => void,
   adjustingId: string | null,
+  onClose?: () => void,
 }) {
   const info = memoryLevelInfo(level as any)
+  const [search, setSearch] = useState('')
+
+  const handlePlayAudio = (e: React.MouseEvent, text: string) => {
+    e.stopPropagation()
+    if (!('speechSynthesis' in window)) return
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'en-US'
+    utterance.rate = 0.88
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const filteredWords = useMemo(() => {
+    if (!search.trim()) return words
+    const q = search.toLowerCase().trim()
+    return words.filter(w => 
+      w.english.toLowerCase().includes(q) || 
+      senseMeanings(w).some(m => m.toLowerCase().includes(q))
+    )
+  }, [words, search])
+
   return (
-    <div className="memory-level-list">
+    <div className="memory-level-list-wrapper" style={{ '--level-color': info.color } as React.CSSProperties}>
       <div className="memory-level-list-header">
-        <h4>{info.label} ({words.length} từ)</h4>
+        <div className="level-title-group">
+          <span className="level-badge-pill" style={{ backgroundColor: info.color }}>
+            LV{level}
+          </span>
+          <div>
+            <h4>{info.label}</h4>
+            <span className="level-word-count">{words.length} từ vựng</span>
+          </div>
+        </div>
+
+        <div className="level-header-actions">
+          {words.length > 4 && (
+            <input 
+              type="text" 
+              className="memory-level-search-input"
+              placeholder="Tìm từ trong cấp độ..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          )}
+          {onClose && (
+            <button 
+              type="button"
+              className="memory-level-close-btn"
+              onClick={onClose}
+              title="Đóng danh sách từ"
+              aria-label="Đóng danh sách từ"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
+
       <div className="memory-level-list-content">
-        {words.length === 0 ? (
-          <p className="empty-message">Không có từ nào ở cấp độ này.</p>
+        {filteredWords.length === 0 ? (
+          <div className="empty-level-state">
+            <p>{search ? 'Không tìm thấy từ phù hợp với từ khóa.' : 'Không có từ nào ở cấp độ này.'}</p>
+          </div>
         ) : (
-          words.map(word => {
-            const isDue = new Date(word.dueAt).getTime() <= Date.now()
-            const isAdjusting = adjustingId === word.id
-            return (
-              <div key={word.id} className={`memory-word-item ${isAdjusting ? 'adjusting' : ''}`}>
-                <div className="word-info">
-                  <strong>{word.english}</strong>
-                  <span>{senseMeanings(word).join(' · ')}</span>
-                  <small className={isDue ? 'due' : ''}>{isDue ? 'Đến hạn ngay' : `Đến hạn: ${new Date(word.dueAt).toLocaleString('vi-VN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}</small>
+          <div className="memory-word-grid">
+            {filteredWords.map(word => {
+              const isDue = new Date(word.dueAt).getTime() <= Date.now()
+              const isAdjusting = adjustingId === word.id
+              const meanings = senseMeanings(word)
+
+              return (
+                <div key={word.id} className={`memory-word-card ${isAdjusting ? 'adjusting' : ''}`}>
+                  <div className="word-card-header">
+                    <div className="word-head-title">
+                      <strong className="word-english">{word.english}</strong>
+                      <button 
+                        type="button" 
+                        className="word-audio-btn" 
+                        onClick={(e) => handlePlayAudio(e, word.english)}
+                        title="Nghe phát âm"
+                      >
+                        <SpeakerIcon className="audio-icon" />
+                      </button>
+                    </div>
+                    {word.ipa && <span className="word-ipa">/{word.ipa}/</span>}
+                  </div>
+
+                  <div className="word-card-meanings">
+                    {meanings.map((m, i) => (
+                      <span key={i} className="meaning-tag">{m}</span>
+                    ))}
+                  </div>
+
+                  <div className="word-card-footer">
+                    <div className="word-due-status">
+                      <span className={`status-indicator ${isDue ? 'is-due' : 'scheduled'}`}>
+                        {isDue ? '● Đến hạn ôn' : '⏳ ' + new Date(word.dueAt).toLocaleString('vi-VN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <div className="word-card-actions">
+                      {level === 1 && (
+                        <span className="level-floor-tag">Cấp thấp nhất</span>
+                      )}
+                      {level === 2 && (
+                        <button 
+                          disabled={isAdjusting} 
+                          onClick={() => onDecrement(word.id)} 
+                          className="action-btn decrement"
+                          title="Giảm xuống cấp 1"
+                        >
+                          ↓ Giảm cấp
+                        </button>
+                      )}
+                      {level >= 3 && (
+                        <>
+                          <button 
+                            disabled={isAdjusting} 
+                            onClick={() => onDecrement(word.id)} 
+                            className="action-btn decrement"
+                            title="Giảm 1 cấp"
+                          >
+                            ↓ Giảm 1 cấp
+                          </button>
+                          <button 
+                            disabled={isAdjusting} 
+                            onClick={() => onReset(word.id)} 
+                            className="action-btn reset"
+                            title="Đưa về cấp 1"
+                          >
+                            ⟲ Về cấp 1
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="word-actions">
-                  {level === 1 && <button disabled className="button ghost small">Đã ở cấp thấp nhất</button>}
-                  {level === 2 && <button disabled={isAdjusting} onClick={() => onDecrement(word.id)} className="button ghost small">Giảm xuống cấp 1</button>}
-                  {level >= 3 && (
-                    <>
-                      <button disabled={isAdjusting} onClick={() => onDecrement(word.id)} className="button ghost small">Giảm 1 cấp</button>
-                      <button disabled={isAdjusting} onClick={() => onReset(word.id)} className="button ghost small danger">Đưa về cấp 1</button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -363,7 +473,7 @@ export function StudyPage() {
             <p className="total-learned">Tổng số từ đã học: <br /><strong>{memoryStats.learnedCount.toLocaleString()}</strong><span>/{activeIds.size}</span></p>
             
             <MemoryBarChart stats={memoryStats.stats} maxCount={memoryStats.maxCount} selectedLevel={selectedMemoryLevel} onSelectLevel={setSelectedMemoryLevel} />
-            {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} />}
+            {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} onClose={() => setSelectedMemoryLevel(null)} />}
           </div>
 
           <div className="panel review-action-card">

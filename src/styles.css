@@ -4328,6 +4328,316 @@ kbd {
   white-space: nowrap;
 }
 
+/* Memory Level List Breakdown Panel (Modern Premium UI) */
+.memory-level-list-wrapper {
+  margin-top: 36px;
+  padding: 20px;
+  background: color-mix(in srgb, var(--surface) 90%, var(--level-color) 10%);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, var(--level-color) 30%);
+  border-radius: 16px;
+  text-align: left;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: slide-down 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.memory-level-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, var(--level-color) 20%);
+  flex-wrap: wrap;
+}
+
+.level-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.level-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--level-color) 40%, transparent);
+}
+
+.level-title-group h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.level-word-count {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.level-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.memory-level-search-input {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.82rem;
+  outline: none;
+  width: 100%;
+  max-width: 200px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.memory-level-search-input:focus {
+  border-color: var(--level-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--level-color) 20%, transparent);
+}
+
+.memory-level-close-btn {
+  background: var(--surface-hover);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.memory-level-close-btn:hover {
+  background: color-mix(in srgb, var(--surface-hover) 80%, var(--rose, #f43f5e) 20%);
+  color: var(--text);
+  transform: scale(1.05);
+}
+
+/* Grid Layout for Word Cards */
+.memory-level-list-content {
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--level-color) 40%, transparent) transparent;
+}
+
+.memory-level-list-content::-webkit-scrollbar {
+  width: 6px;
+}
+.memory-level-list-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.memory-level-list-content::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--level-color) 40%, transparent);
+  border-radius: 99px;
+}
+
+.memory-word-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.memory-word-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  gap: 10px;
+  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  position: relative;
+}
+
+.memory-word-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--line) 50%, var(--level-color) 50%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.memory-word-card.adjusting {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.word-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.word-head-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.word-english {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.word-audio-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.word-audio-btn:hover {
+  color: var(--level-color);
+  background: var(--surface-hover);
+}
+
+.audio-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.word-ipa {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.word-card-meanings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meaning-tag {
+  font-size: 0.85rem;
+  color: var(--text-subtle, var(--text));
+  background: var(--surface-hover);
+  padding: 3px 8px;
+  border-radius: 6px;
+  line-height: 1.3;
+}
+
+.word-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  margin-top: auto;
+}
+
+.word-due-status {
+  font-size: 0.75rem;
+}
+
+.status-indicator {
+  font-weight: 600;
+}
+
+.status-indicator.is-due {
+  color: #ef4444;
+}
+
+.status-indicator.scheduled {
+  color: var(--muted);
+}
+
+.word-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-btn {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: var(--surface-hi);
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.action-btn.reset {
+  color: var(--rose, #f43f5e);
+  border-color: color-mix(in srgb, var(--rose, #f43f5e) 30%, transparent);
+}
+
+.action-btn.reset:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--rose, #f43f5e) 15%, transparent);
+  border-color: var(--rose, #f43f5e);
+}
+
+.level-floor-tag {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.empty-level-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 540px) {
+  .memory-word-grid {
+    grid-template-columns: 1fr;
+  }
+  .memory-level-search-input {
+    max-width: 100%;
+  }
+  .memory-level-list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .level-header-actions {
+    justify-content: space-between;
+  }
+}
+
 .review-action-card {
   text-align: left;
   padding: 28px 24px;
