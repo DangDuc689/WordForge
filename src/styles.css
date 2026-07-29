@@ -605,7 +605,7 @@ a {
   gap: 24px;
 }
 
-.mission-panel, .progress-panel, .recent-panel {
+.mission-panel, .progress-panel, .activity-calendar-panel, .recent-panel {
   padding: 28px;
 }
 
@@ -821,6 +821,204 @@ a {
 .result-bad {
   background: #fce8e6;
   color: #c5221f;
+}
+
+/* Activity Heatmap Calendar Panel (UI/UX designer guidelines & modern theme) */
+.activity-calendar-panel {
+  margin-bottom: 28px;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font: 600 0.78rem 'Be Vietnam Pro', sans-serif;
+  color: var(--muted);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-box {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.legend-box.active {
+  background: var(--cyan);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
+}
+
+.legend-box.inactive {
+  background: var(--surface);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.heatmap-frame {
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.heatmap-scroll-area {
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) var(--bg2);
+}
+
+.heatmap-header-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 6px;
+  align-items: flex-end;
+  height: 18px;
+}
+
+.heatmap-row-label-placeholder {
+  width: 38px;
+  flex-shrink: 0;
+}
+
+.heatmap-months {
+  display: flex;
+  gap: 3px;
+}
+
+.heatmap-month-col {
+  position: relative;
+  width: 14px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.heatmap-month-col span {
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  white-space: nowrap;
+  font: 600 0.74rem 'JetBrains Mono', monospace;
+  color: var(--muted);
+  letter-spacing: -0.02em;
+}
+
+.heatmap-grid-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.heatmap-weekdays {
+  width: 38px;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-rows: repeat(7, 14px);
+  gap: 3px;
+  align-items: center;
+}
+
+.heatmap-weekdays span {
+  font: 600 0.72rem 'Be Vietnam Pro', sans-serif;
+  color: var(--faint);
+  text-align: left;
+  line-height: 1;
+}
+
+.heatmap-weeks {
+  display: flex;
+  gap: 3px;
+}
+
+.heatmap-week-col {
+  display: grid;
+  grid-template-rows: repeat(7, 14px);
+  gap: 3px;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.heatmap-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.heatmap-cell.outside {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.heatmap-cell.active {
+  background: var(--cyan);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
+}
+
+.heatmap-cell.inactive {
+  background: var(--surface);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.heatmap-cell.future {
+  background: rgba(226, 232, 240, 0.25);
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  cursor: default;
+  opacity: 0.5;
+}
+
+:root[data-theme="dark"] .heatmap-cell.future, .dark .heatmap-cell.future {
+  background: rgba(30, 41, 59, 0.3);
+  border-color: rgba(71, 85, 105, 0.25);
+}
+
+.heatmap-cell:not(.future):hover, .heatmap-cell:not(.future):focus-visible {
+  transform: scale(1.35);
+  z-index: 10;
+  outline: none;
+}
+
+.heatmap-cell.active:hover, .heatmap-cell.active:focus-visible {
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+  border-color: #fff;
+}
+
+.heatmap-cell.inactive:hover, .heatmap-cell.inactive:focus-visible {
+  border-color: var(--cyan);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.heatmap-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+  font: 500 0.84rem 'Be Vietnam Pro', sans-serif;
+  color: var(--muted);
+}
+
+.heatmap-footer span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.heatmap-footer b {
+  font: 700 0.95rem 'JetBrains Mono', monospace;
+  color: var(--text);
 }
 
 .empty-state {
@@ -2867,6 +3065,17 @@ textarea {
   }
   .dashboard-grid, .settings-grid {
     grid-template-columns: 1fr;
+  }
+  .heatmap-frame {
+    padding: 16px;
+  }
+  .heatmap-legend {
+    margin-top: 10px;
+    width: 100%;
+  }
+  .activity-calendar-panel .section-title {
+    flex-direction: column;
+    align-items: flex-start;
   }
   .filter-bar {
     flex-wrap: wrap;

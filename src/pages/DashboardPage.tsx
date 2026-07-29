@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
+import { ActivityCalendar } from '../components/ActivityCalendar'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
-import { senseMeanings } from '../domain/vocabulary'
 
 const statMeta = [
   ['newCount', 'Từ mới', 'Chưa bắt đầu', 'cyan'],
@@ -12,8 +12,6 @@ const statMeta = [
 
 export function DashboardPage() {
   const { snapshot, stats } = useApp()
-  const recent = snapshot.reviews.slice(0, 6)
-  const words = new Map(snapshot.vocabulary.map((word) => [word.id, word]))
   return (
     <div className="page dashboard-page">
       <PageHeader
@@ -40,6 +38,8 @@ export function DashboardPage() {
         ))}
       </section>
 
+      <ActivityCalendar />
+
       <section className="dashboard-grid">
         <article className="panel mission-panel">
           <div className="section-title"><span><b>Nhiệm vụ hôm nay</b><small>Tự chọn đường học phù hợp</small></span></div>
@@ -61,16 +61,6 @@ export function DashboardPage() {
             <span><b>{stats.todayReviewedCount}</b><small>ôn hôm nay</small></span>
           </div>
         </article>
-      </section>
-
-      <section className="panel recent-panel">
-        <div className="section-title"><span><b>Hoạt động gần đây</b><small>Những lần nhớ lại mới nhất</small></span><Link to="/review">Ôn tiếp</Link></div>
-        {recent.length === 0 ? <div className="empty-state compact">Chưa có lịch sử. Hãy bắt đầu với vài từ mới.</div> : (
-          <div className="recent-list">{recent.map((review) => {
-            const word = words.get(review.vocabularyId)
-            return <div key={review.id}><span className={review.correct ? 'result-ok' : 'result-bad'}>{review.correct ? '✓' : '×'}</span><span><b>{word?.english ?? 'Từ đã xóa'}</b><small>{word ? senseMeanings(word).join(' · ') : ''}</small></span><em>{review.rating === 6 ? 'Nhớ sâu' : ('Cấp độ ' + review.rating)}</em><time>{new Date(review.reviewedAt).toLocaleDateString('vi-VN')}</time></div>
-          })}</div>
-        )}
       </section>
     </div>
   )
