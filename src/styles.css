@@ -828,18 +828,12 @@ a {
   margin-bottom: 28px;
 }
 
-.heatmap-legend {
+.heatmap-intensity-legend {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 5px;
   font: 600 0.78rem 'Be Vietnam Pro', sans-serif;
   color: var(--muted);
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .legend-box {
@@ -847,18 +841,35 @@ a {
   height: 14px;
   border-radius: 4px;
   display: inline-block;
+  flex-shrink: 0;
 }
 
-.legend-box.active {
-  background: var(--cyan);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
-}
-
-.legend-box.inactive {
+.legend-box.level-0 {
   background: var(--surface);
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
+
+.legend-box.level-1, .heatmap-cell.level-1 { background: #bbf7d0; }
+.legend-box.level-2, .heatmap-cell.level-2 { background: #4ade80; }
+.legend-box.level-3, .heatmap-cell.level-3 { background: #16a34a; }
+.legend-box.level-4, .heatmap-cell.level-4 { background: #15803d; }
+
+:root[data-theme="dark"] .legend-box.level-1,
+:root[data-theme="dark"] .heatmap-cell.level-1,
+.dark .legend-box.level-1,
+.dark .heatmap-cell.level-1 { background: #14532d; }
+:root[data-theme="dark"] .legend-box.level-2,
+:root[data-theme="dark"] .heatmap-cell.level-2,
+.dark .legend-box.level-2,
+.dark .heatmap-cell.level-2 { background: #166534; }
+:root[data-theme="dark"] .legend-box.level-3,
+:root[data-theme="dark"] .heatmap-cell.level-3,
+.dark .legend-box.level-3,
+.dark .heatmap-cell.level-3 { background: #16a34a; }
+:root[data-theme="dark"] .legend-box.level-4,
+:root[data-theme="dark"] .heatmap-cell.level-4,
+.dark .legend-box.level-4,
+.dark .heatmap-cell.level-4 { background: #4ade80; }
 
 .heatmap-frame {
   background: var(--bg2);
@@ -960,9 +971,8 @@ a {
 }
 
 .heatmap-cell.active {
-  background: var(--cyan);
   border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 2px 5px rgba(22, 163, 74, 0.25);
 }
 
 .heatmap-cell.inactive {
@@ -970,27 +980,24 @@ a {
   border: 1px solid rgba(148, 163, 184, 0.22);
 }
 
-.heatmap-cell.future {
-  background: rgba(226, 232, 240, 0.25);
-  border: 1px dashed rgba(148, 163, 184, 0.18);
-  cursor: default;
-  opacity: 0.5;
+.heatmap-cell.today {
+  z-index: 2;
+  box-shadow: 0 0 0 2px var(--bg2), 0 0 0 4px #f59e0b;
 }
 
-:root[data-theme="dark"] .heatmap-cell.future, .dark .heatmap-cell.future {
-  background: rgba(30, 41, 59, 0.3);
-  border-color: rgba(71, 85, 105, 0.25);
-}
-
-.heatmap-cell:not(.future):hover, .heatmap-cell:not(.future):focus-visible {
+.heatmap-cell:not(.outside):hover, .heatmap-cell:not(.outside):focus-visible {
   transform: scale(1.35);
   z-index: 10;
   outline: none;
 }
 
 .heatmap-cell.active:hover, .heatmap-cell.active:focus-visible {
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.5);
   border-color: #fff;
+}
+
+.heatmap-cell.today:hover, .heatmap-cell.today:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg2), 0 0 0 4px #f59e0b, 0 6px 16px rgba(245, 158, 11, 0.35);
 }
 
 .heatmap-cell.inactive:hover, .heatmap-cell.inactive:focus-visible {
@@ -3069,7 +3076,7 @@ textarea {
   .heatmap-frame {
     padding: 16px;
   }
-  .heatmap-legend {
+  .heatmap-intensity-legend {
     margin-top: 10px;
     width: 100%;
   }

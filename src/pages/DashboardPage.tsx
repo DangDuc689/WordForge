@@ -7,7 +7,7 @@ const statMeta = [
   ['newCount', 'Từ mới', 'Chưa bắt đầu', 'cyan'],
   ['learningCount', 'Đang học', 'Đang ở cấp độ 1', 'amber'],
   ['dueCount', 'Đến hạn', 'Nên ôn hôm nay', 'pink'],
-  ['weakCount', 'Từ yếu', 'Cần củng cố', 'green'],
+  ['todayLearnedCount', 'Từ hôm nay', 'Đã học hôm nay', 'green'],
 ] as const
 
 export function DashboardPage() {
@@ -22,9 +22,6 @@ export function DashboardPage() {
           <>
             <div className="streak-pill">
               <span>🔥</span><b>{stats.streak}</b><small>ngày liên tiếp</small>
-            </div>
-            <div className="streak-pill today-pill" title={`Học mới: ${stats.todayLearnedCount} từ, ôn tập: ${stats.todayReviewedCount} từ`}>
-              <span>📚</span><b>{stats.todayLearnedCount}</b><small>từ hôm nay</small>
             </div>
           </>
         }
