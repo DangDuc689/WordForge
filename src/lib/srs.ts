@@ -52,6 +52,7 @@ export function scheduleReview(args: {
   responseMs?: number | null
   usedHint?: boolean
   now?: Date
+  eventId?: string
 }): ReviewResult {
   const now = args.now ?? new Date()
   const level = nextMemoryLevel(args.card, args.correct)
@@ -76,7 +77,7 @@ export function scheduleReview(args: {
       updatedAt: stamp,
     },
     event: {
-      id: crypto.randomUUID(), userId: args.card.userId, vocabularyId: args.card.vocabularyId,
+      id: args.eventId ?? crypto.randomUUID(), userId: args.card.userId, vocabularyId: args.card.vocabularyId,
       mode: args.mode, rating: level, correct: args.correct,
       responseMs: args.responseMs ?? null, usedHint: args.usedHint ?? false,
       submittedAnswer: args.submittedAnswer ?? '', reviewedAt: stamp,

@@ -1,6 +1,6 @@
 # Supabase setup
 
-1. Create a Supabase project and run `supabase db push` to apply migrations 0001–0003.
+1. Create a Supabase project and run `supabase db push` to apply migrations 0001–0008.
 2. Enable Email OTP/magic-link and disable public sign-up; invite the owner email.
 3. Deploy both functions with the Supabase CLI.
 4. Set secrets:

@@ -10,3 +10,4 @@ coverage
 public/catalog/**/.generation-progress.json
 Note/
 supabase/.temp/
+.codex/

@@ -81,12 +81,12 @@ export class LocalRepository implements AppRepository {
     if (!cards.length) return
     this.update((snapshot) => ({ ...snapshot, cards: cards.reduce((items, card) => upsert(items, card), snapshot.cards) }))
   }
-  async addReview(event: ReviewEvent) { this.update((snapshot) => ({ ...snapshot, reviews: [event, ...snapshot.reviews].slice(0, 5_000) })) }
+  async addReview(event: ReviewEvent) { this.update((snapshot) => ({ ...snapshot, reviews: upsert(snapshot.reviews, event).slice(0, 5_000) })) }
   async addReviews(events: ReviewEvent[]) {
     if (!events.length) return
-    this.update((snapshot) => ({ ...snapshot, reviews: [...events, ...snapshot.reviews].slice(0, 5_000) }))
+    this.update((snapshot) => ({ ...snapshot, reviews: events.reduce((items, event) => upsert(items, event), snapshot.reviews).slice(0, 5_000) }))
   }
-  async addGameRun(run: GameRun) { this.update((snapshot) => ({ ...snapshot, gameRuns: [run, ...snapshot.gameRuns].slice(0, 500) })) }
+  async addGameRun(run: GameRun) { this.update((snapshot) => ({ ...snapshot, gameRuns: upsert(snapshot.gameRuns, run).slice(0, 500) })) }
   async savePracticeSession(session: PracticeSession) {
     this.update((snapshot) => ({ ...snapshot, practiceSessions: upsert(snapshot.practiceSessions, session).slice(0, 200) }))
   }

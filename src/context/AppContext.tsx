@@ -3,8 +3,8 @@ import type {
   AiPracticeSet,
   AppSnapshot,
   Deck,
-  GameOutcome,
   GameRun,
+  GameSaveRequest,
   LearnSession,
   VocabularyImportResult,
   PracticeSession,
@@ -41,7 +41,7 @@ interface AppValue {
   deleteDeck: (id: string) => Promise<void>
   importOxfordLevels: (levels: OxfordLevel[]) => Promise<VocabularyImportResult>
   reviewWord: (input: ReviewInput) => Promise<void>
-  recordGame: (run: Omit<GameRun, 'id' | 'userId' | 'createdAt'>, outcomes: GameOutcome[]) => Promise<void>
+  recordGame: (request: GameSaveRequest) => Promise<void>
   updateProfile: (input: Partial<Pick<Profile, 'newWordsPerSession' | 'desiredRetention' | 'aiEnabled' | 'timezone'>>) => Promise<void>
   savePractice: (deckId: string | null, format: 'reading' | 'quiz' | 'dialogue' | 'dictation', targetIds: string[], content: AiPracticeSet, score?: number | null) => Promise<PracticeSession>
   updatePracticeSession: (session: PracticeSession) => Promise<void>
@@ -379,37 +379,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
           reviews: [result.event, ...state.reviews],
         }) : state)
       },
-      async recordGame(runInput, outcomes) {
+      async recordGame(request) {
         const current = requireSnapshot()
-        const run: GameRun = { ...runInput, id: crypto.randomUUID(), userId, createdAt: nowIso() }
-        const reviewResults = aggregateGameOutcomes(outcomes).flatMap((outcome) => {
+
+        const reviewResults = aggregateGameOutcomes(request.outcomes).flatMap((outcome) => {
           const card = current.cards.find((item) => item.vocabularyId === outcome.vocabularyId)
-          if (!card || !isDue(card)) return []
+          if (!card || !isDue(card, new Date(request.createdAt))) return []
           return [scheduleReview({
             card,
-            mode: run.inputMode === 'typing' ? 'game-typing' : 'game-touch',
+            mode: request.inputMode === 'typing' ? 'game-typing' : 'game-touch',
             correct: ratingFromGameOutcome(outcome),
             responseMs: outcome.responseMs,
             usedHint: outcome.usedHint,
+            now: new Date(request.createdAt),
+            eventId: request.reviewEventIds[outcome.vocabularyId],
           })]
         })
 
-        try {
-          await repository.addGameRun(run)
-          await Promise.all([
-            repository.saveCards(reviewResults.map((result) => result.card)),
-            repository.addReviews(reviewResults.map((result) => result.event)),
-          ])
-        } catch (err) {
-          console.warn('Game persistence warning (cloud sync failed, updating local state):', err)
-        }
+        await repository.saveCards(reviewResults.map((result) => result.card))
+        await repository.addReviews(reviewResults.map((result) => result.event))
 
-        setSnapshot((state) => state ? ({
-          ...state,
-          gameRuns: [run, ...state.gameRuns],
-          cards: state.cards.map((card) => reviewResults.find((result) => result.card.id === card.id)?.card ?? card),
-          reviews: [...reviewResults.map((result) => result.event), ...state.reviews],
-        }) : state)
+        const run: GameRun = {
+          id: request.runId,
+          userId,
+          deckId: request.deckId,
+          score: request.score,
+          wave: request.wave,
+          accuracy: request.accuracy,
+          durationSeconds: request.durationSeconds,
+          inputMode: request.inputMode,
+          createdAt: request.createdAt
+        }
+        await repository.addGameRun(run)
+
+        setSnapshot((state) => {
+          if (!state) return state
+
+          const nextGameRuns = state.gameRuns.some(r => r.id === run.id)
+            ? state.gameRuns.map(r => r.id === run.id ? run : r)
+            : [run, ...state.gameRuns]
+
+          const nextCards = state.cards.map((card) => {
+            const updated = reviewResults.find((result) => result.card.id === card.id)
+            return updated ? updated.card : card
+          })
+
+          const newEvents = reviewResults.map(r => r.event)
+          const nextReviews = [...newEvents.filter(e => !state.reviews.some(sr => sr.id === e.id)), ...state.reviews]
+
+          return {
+            ...state,
+            gameRuns: nextGameRuns,
+            cards: nextCards,
+            reviews: nextReviews,
+          }
+        })
       },
       async updateProfile(input) {
         const profile = { ...snapshot.profile, ...input, updatedAt: nowIso() }
@@ -448,7 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           vocabulary: parsed.vocabulary.map((item) => ({ ...item, userId, source: item.source ?? 'manual', sourceKey: item.sourceKey ?? '' })),
           cards: (parsed.cards ?? []).map((item) => ({ ...item, userId, memoryLevel: item.memoryLevel >= 1 && item.memoryLevel <= 6 ? item.memoryLevel : (item.lastRating === 4 ? 6 : item.lastRating === 3 ? 4 : item.lastRating === 2 ? 2 : 1) })),
           reviews: (parsed.reviews ?? []).map((item) => ({ ...item, userId, rating: legacyBackup ? (item.rating === 4 ? 6 : item.rating === 3 ? 4 : item.rating === 2 ? 2 : 1) : item.rating })),
-          gameRuns: (parsed.gameRuns ?? []).map((item) => ({ ...item, userId })),
+          gameRuns: (parsed.gameRuns ?? []).map((item) => ({ ...item, userId, deckId: item.deckId === 'all' ? null : item.deckId })),
           practiceSessions: (parsed.practiceSessions ?? []).map((item) => ({ ...item, userId })),
         }
         const upgraded = deduplicateSnapshot(rebound).snapshot
@@ -465,10 +489,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         else if (action === 'decrement') newLevel = Math.max(1, existing.memoryLevel - 1) as 1 | 2 | 3 | 4 | 5 | 6
 
         if (newLevel === existing.memoryLevel) return
-        
+
         const schedule = memoryLevelInfo(newLevel)
         const stamp = nowIso()
-        
+
         const updatedCard = {
           ...existing,
           memoryLevel: newLevel,
@@ -480,7 +504,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           learningSteps: newLevel === 1 ? 1 : 0,
           state: (newLevel === 1 ? 1 : 2) as 0 | 1 | 2 | 3,
         }
-        
+
         await repository.saveCard(updatedCard)
         setSnapshot((state) => state ? ({
           ...state,

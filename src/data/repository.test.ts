@@ -60,4 +60,30 @@ describe('legacy backup compatibility', () => {
     const otherLoaded = await repository.loadLearnSession('u456')
     expect(otherLoaded).toBeNull()
   })
+
+  it('upserts game runs and reviews safely to prevent duplication on retry', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({
+      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, createdAt: '', updatedAt: '' },
+      decks: [], vocabulary: [], cards: [], reviews: [], gameRuns: [], practiceSessions: [],
+    }))
+    const repository = new LocalRepository()
+    const run = { id: 'run1', userId: 'u', deckId: null, score: 100, wave: 1, accuracy: 100, durationSeconds: 60, inputMode: 'typing' as const, createdAt: '2026-08-01T00:00:00Z' }
+    const review = { id: 'rev1', userId: 'u', vocabularyId: 'v', mode: 'game-typing' as const, rating: 6 as const, correct: true, responseMs: 1000, usedHint: false, submittedAnswer: '', reviewedAt: '2026-08-01T00:00:00Z' }
+    
+    // First save
+    await repository.addGameRun(run)
+    await repository.addReviews([review])
+    
+    let snapshot = await repository.load()
+    expect(snapshot?.gameRuns).toHaveLength(1)
+    expect(snapshot?.reviews).toHaveLength(1)
+    
+    // Retry save (simulating a retry after partial failure)
+    await repository.addGameRun(run)
+    await repository.addReviews([review])
+    
+    snapshot = await repository.load()
+    expect(snapshot?.gameRuns).toHaveLength(1) // Should still be 1
+    expect(snapshot?.reviews).toHaveLength(1) // Should still be 1
+  })
 })

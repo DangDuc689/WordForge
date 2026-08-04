@@ -132,7 +132,7 @@ export interface ReviewEvent {
 export interface GameRun {
   id: string
   userId: string
-  deckId: string
+  deckId: string | null
   score: number
   wave: number
   accuracy: number
@@ -210,6 +210,19 @@ export interface GameOutcome {
   responseMs: number
   usedHint: boolean
   hadTargetMistake: boolean
+}
+
+export interface GameSaveRequest {
+  runId: string
+  deckId: string | null
+  score: number
+  wave: number
+  accuracy: number
+  durationSeconds: number
+  inputMode: 'typing' | 'touch'
+  createdAt: string
+  outcomes: GameOutcome[]
+  reviewEventIds: Record<string, string>
 }
 
 export interface LearnSession {

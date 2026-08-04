@@ -3,7 +3,8 @@ import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { GameEngine, type GameSnapshot, type ShopKey } from '../game/GameEngine'
 import { buildGamePool, type GamePoolSource } from '../game/sessionPool'
-import { useSearchParams } from 'react-router-dom'
+import type { GameSaveRequest } from '../domain/types'
+import { useSearchParams, useBlocker } from 'react-router-dom'
 
 const IconArrowRight = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-2px' }}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -73,18 +74,21 @@ const formatGameTime = (seconds: number) => Math.floor(seconds / 60) + ':' + Str
 function GameResultPanel({
   hud,
   accuracy,
-  saved,
+  saveStatus,
   saveError,
   onDrill,
   onStop,
+  onRetrySave,
 }: {
   hud: GameSnapshot
   accuracy: number
-  saved: boolean
+  saveStatus: 'idle' | 'saving' | 'saved' | 'failed'
   saveError: string
   onDrill: () => void
   onStop: () => void
+  onRetrySave: () => void
 }) {
+  const isSaving = saveStatus === 'saving'
   return <section className="game-result-card" role="dialog" aria-modal="true" aria-labelledby="game-result-title">
     <span className={'eyebrow ' + (hud.endReason === 'breached' ? 'danger-text' : '')}>{hud.endReason === 'completed' ? 'Đã ôn hết bộ từ' : hud.endReason === 'ended' ? 'Trận đấu kết thúc sớm' : 'Core breached'}</span>
     <h2 id="game-result-title">{hud.endReason === 'completed' ? <>Hoàn thành <em>bộ từ</em></> : hud.endReason === 'ended' ? <>Tổng kết <em className="accent">kết quả</em></> : <>Siege <em className="danger-text">over</em></>}</h2>
@@ -96,8 +100,9 @@ function GameResultPanel({
     </div>
     <h3>Từ đã lọt qua <small>{hud.missed.length}</small></h3>
     <div className="missed-words">{hud.missed.map((word) => <span key={word.id}><b>{word.vietnamese}</b><em>{word.english}</em></span>)}</div>
-    <div className="button-row">{hud.missed.length > 0 && <button className="button primary" onClick={onDrill}><span>Drill từ đã sai</span> <IconArrowRight /></button>}<button className="button ghost" onClick={onStop}>Về màn chuẩn bị</button></div>
-    <small>{saveError ? <span className="danger-text"><IconAlertCircle /> Lỗi: {saveError}</span> : saved ? <><IconCheck /> Lịch học và game run đã được lưu</> : 'Đang lưu kết quả…'}</small>
+    <div className="button-row">{hud.missed.length > 0 && <button className="button primary" onClick={onDrill} disabled={isSaving}><span>Drill từ đã sai</span> <IconArrowRight /></button>}<button className="button ghost" onClick={onStop} disabled={isSaving}>Về màn chuẩn bị</button></div>
+    {saveStatus === 'failed' && <div className="button-row" style={{ marginTop: '12px' }}><button className="button secondary" onClick={onRetrySave}>Thử lưu lại</button></div>}
+    <small>{saveStatus === 'failed' ? <span className="danger-text"><IconAlertCircle /> Lỗi: {saveError} (Không cần chơi lại)</span> : saveStatus === 'saved' ? <><IconCheck /> Lịch học và game run đã được lưu</> : 'Đang lưu kết quả…'}</small>
   </section>
 }
 
@@ -110,8 +115,9 @@ export function GamePage() {
   const [running, setRunning] = useState(false)
   const [hud, setHud] = useState<GameSnapshot | null>(null)
   const [answer, setAnswer] = useState('')
-  const [saved, setSaved] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [saveError, setSaveError] = useState('')
+  const [saveRequest, setSaveRequest] = useState<GameSaveRequest | null>(null)
   const [drillIndex, setDrillIndex] = useState<number | null>(null)
   const [flipped, setFlipped] = useState(false)
   const [isError, setIsError] = useState(false)
@@ -125,30 +131,45 @@ export function GamePage() {
   recordGameRef.current = recordGame
   const pool = useMemo(() => buildGamePool(snapshot.vocabulary, snapshot.cards, deckId, new Date(), { source, selectedIds: source === 'due' ? selectedIds : undefined }), [deckId, selectedIds, snapshot.cards, snapshot.vocabulary, source])
   const inputMode: 'typing' | 'touch' = typeof window !== 'undefined' && (matchMedia('(pointer: coarse)').matches || window.innerWidth < 760) ? 'touch' : 'typing'
+  const redirectTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => { if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current) }
+  }, [])
 
   useEffect(() => {
     if (!running || !canvasRef.current) return
-    setSaved(false)
+    setSaveStatus('idle')
     setSaveError('')
     const engine = new GameEngine(canvasRef.current, pool, inputMode, {
       onUpdate: setHud,
       onGameOver: (finalState, outcomes) => {
         setHud(finalState)
         const total = finalState.correct + finalState.wrong
+        const req: GameSaveRequest = {
+          runId: crypto.randomUUID(),
+          deckId: deckId === 'all' ? null : deckId,
+          score: finalState.score, wave: finalState.wave,
+          accuracy: total ? Math.round(finalState.correct / total * 100) : 100,
+          durationSeconds: Math.round(finalState.time), inputMode,
+          createdAt: new Date().toISOString(),
+          outcomes,
+          reviewEventIds: Object.fromEntries(outcomes.map(o => [o.vocabularyId, crypto.randomUUID()]))
+        }
+        setSaveRequest(req)
+        setSaveStatus('saving')
+
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          void recordGameRef.current({
-            deckId, score: finalState.score, wave: finalState.wave,
-            accuracy: total ? Math.round(finalState.correct / total * 100) : 100,
-            durationSeconds: Math.round(finalState.time), inputMode,
-          }, outcomes)
+          void recordGameRef.current(req)
             .then(() => {
-              setSaved(true)
+              setSaveStatus('saved')
               if (source === 'due' && finalState.endReason === 'completed') {
-                window.setTimeout(() => window.location.replace('/review'), 1200)
+                redirectTimerRef.current = window.setTimeout(() => window.location.replace('/review'), 1200)
               }
             })
             .catch((err) => {
               console.error('Failed to save game:', err)
+              setSaveStatus('failed')
               setSaveError(err instanceof Error ? err.message : 'Lỗi kết nối')
             })
         }))
@@ -161,7 +182,7 @@ export function GamePage() {
     const hotkeys = (event: KeyboardEvent) => {
       const activeEl = document.activeElement
       const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')
-      
+
       if ((event.altKey && event.key === '1') || (!isTyping && event.key === '1')) {
         event.preventDefault()
         engine.useSlow()
@@ -180,6 +201,43 @@ export function GamePage() {
     return () => { engine.destroy(); engineRef.current = null; window.removeEventListener('resize', resize); window.removeEventListener('keydown', hotkeys) }
   }, [deckId, inputMode, running, source, selectedIds])
 
+  useBlocker(() => {
+    if (hud?.phase === 'over' && saveStatus !== 'saved') {
+      if (saveStatus === 'saving') return true
+      return !window.confirm('Dữ liệu chưa được lưu. Nếu rời đi bạn sẽ không thể thử lưu lại và kết quả sẽ bị hủy. Bạn có chắc chắn muốn thoát?')
+    }
+    return false
+  })
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hud?.phase === 'over' && saveStatus !== 'saved') {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hud?.phase, saveStatus])
+
+  const handleRetrySave = () => {
+    if (!saveRequest) return
+    setSaveError('')
+    setSaveStatus('saving')
+    recordGameRef.current(saveRequest)
+      .then(() => {
+        setSaveStatus('saved')
+        if (source === 'due' && hud?.endReason === 'completed') {
+          redirectTimerRef.current = window.setTimeout(() => window.location.replace('/review'), 1200)
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to save game:', err)
+        setSaveStatus('failed')
+        setSaveError(err instanceof Error ? err.message : 'Lỗi kết nối')
+      })
+  }
+
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (!answer.trim()) return
@@ -192,11 +250,16 @@ export function GamePage() {
   }
 
   const stop = () => {
-    if (hud && hud.phase !== 'over') {
-      if (!confirm('Bạn có chắc chắn muốn THOÁT trận đấu? Toàn bộ kết quả và điểm số của trận đấu này sẽ BỊ HỦY và KHÔNG ĐƯỢC LƯU.')) {
+    if (hud && hud.phase === 'over' && saveStatus === 'failed') {
+      if (!window.confirm('Dữ liệu chưa được lưu. Nếu rời đi bạn sẽ không thể thử lưu lại và kết quả sẽ bị hủy. Bạn có chắc chắn muốn thoát?')) {
+        return
+      }
+    } else if (hud && hud.phase !== 'over') {
+      if (!window.confirm('Bạn có chắc chắn muốn THOÁT trận đấu? Toàn bộ kết quả và điểm số của trận đấu này sẽ BỊ HỦY và KHÔNG ĐƯỢC LƯU.')) {
         return
       }
     }
+    if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current)
     setRunning(false)
     setHud(null)
     setDrillIndex(null)
@@ -213,7 +276,7 @@ export function GamePage() {
     return <div className="game-screen game-results-screen">
       {drillWord
         ? <section className="game-result-card drill-card"><span className="eyebrow">Remedial drill · {currentDrillIndex + 1}/{hud.missed.length}</span><div className="flashcard" onClick={() => setFlipped(true)}><small>{drillWord.category} · tier {drillWord.tier}</small><h2>{drillWord.vietnamese}</h2>{flipped ? <b>{drillWord.english}</b> : <em>Chạm để lật</em>}</div><button className="button primary" onClick={() => { if (!flipped) setFlipped(true); else if (currentDrillIndex < hud.missed.length - 1) { setDrillIndex(currentDrillIndex + 1); setFlipped(false) } else setDrillIndex(null) }}>{!flipped ? 'Hiện đáp án' : currentDrillIndex < hud.missed.length - 1 ? <><span>Từ tiếp theo</span> <IconArrowRight /></> : 'Hoàn thành'}</button></section>
-        : <GameResultPanel hud={hud} accuracy={accuracy} saved={saved} saveError={saveError} onDrill={() => { setDrillIndex(0); setFlipped(false) }} onStop={stop} />}
+        : <GameResultPanel hud={hud} accuracy={accuracy} saveStatus={saveStatus} saveError={saveError} onDrill={() => { setDrillIndex(0); setFlipped(false) }} onStop={stop} onRetrySave={handleRetrySave} />}
     </div>
   }
 
@@ -221,7 +284,7 @@ export function GamePage() {
     <canvas ref={canvasRef} className="game-canvas" onPointerDown={(event) => engineRef.current?.tap(event.clientX, event.clientY)} />
     {hud && <>
       <div className="game-hud left"><div><span>WAVE</span><b>{hud.wave}</b></div><div><span>SCORE</span><b>{hud.score.toLocaleString()}</b></div><div><span>XP</span><b>{hud.xp}</b></div><div className="hp-meter"><span>CORE {Math.ceil(hud.hp)}/{hud.maxHp}</span><i><b style={{ width: `${Math.max(0, hud.hp / hud.maxHp * 100)}%` }} /></i></div></div>
-      <div className="game-hud right"><strong className={hud.multiplier > 1 ? 'active' : ''}>×{hud.multiplier}{hud.multiplier === 5 ? ' MAX' : ''}</strong><button className={hud.slow.owned && hud.slow.timer <= 0 ? 'ready' : ''} onClick={() => engineRef.current?.useSlow()}><span><IconSnowflake />Slow-Time</span><kbd>Alt+1</kbd>{hud.slow.timer > 0 && <small>{hud.slow.timer.toFixed(1)}s</small>}</button><button className={hud.hint.owned && hud.hint.timer <= 0 ? 'ready' : ''} onClick={() => engineRef.current?.useHint()}><span><IconEye />Reveal</span><kbd>Alt+2</kbd>{hud.hint.timer > 0 && <small>{hud.hint.timer.toFixed(1)}s</small>}</button></div>
+      <div className="game-hud right"><strong className={hud.multiplier > 1 ? 'active' : ''}>×{hud.multiplier}{hud.multiplier === 5 ? ' MAX' : ''}</strong></div>
       {inputMode === 'touch' ? <div className="touch-target"><small>CHẠM QUÁI CÓ NGHĨA</small><b>{hud.targetEnglish || 'Chuẩn bị…'}</b></div> : <form className={`game-input ${isError ? 'shake-error' : ''}`} onSubmit={submit}><input ref={inputRef} value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e) } }} autoComplete="off" spellCheck={false} placeholder="gõ bản dịch tiếng Anh rồi Enter" /><button type="submit" style={{ display: 'none' }} /></form>}
     </>}
     <div className="game-controls">
