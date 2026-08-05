@@ -79,7 +79,7 @@ export function scheduleReview(args: {
     event: {
       id: args.eventId ?? crypto.randomUUID(), userId: args.card.userId, vocabularyId: args.card.vocabularyId,
       mode: args.mode, rating: level, correct: args.correct,
-      responseMs: args.responseMs ?? null, usedHint: args.usedHint ?? false,
+      responseMs: args.responseMs != null ? Math.round(args.responseMs) : null, usedHint: args.usedHint ?? false,
       submittedAnswer: args.submittedAnswer ?? '', reviewedAt: stamp,
     },
   }
@@ -94,11 +94,12 @@ export function aggregateGameOutcomes(outcomes: GameOutcome[]): GameOutcome[] {
   const grouped = new Map<string, GameOutcome>()
   for (const outcome of outcomes) {
     const previous = grouped.get(outcome.vocabularyId)
-    if (!previous) { grouped.set(outcome.vocabularyId, { ...outcome }); continue }
+    const roundedOutcome = { ...outcome, responseMs: Math.round(outcome.responseMs) }
+    if (!previous) { grouped.set(outcome.vocabularyId, roundedOutcome); continue }
     grouped.set(outcome.vocabularyId, {
       ...previous,
       terminal: previous.terminal === 'breached' || outcome.terminal === 'breached' ? 'breached' : 'killed',
-      responseMs: Math.max(previous.responseMs, outcome.responseMs),
+      responseMs: Math.round(Math.max(previous.responseMs, roundedOutcome.responseMs)),
       usedHint: previous.usedHint || outcome.usedHint,
       hadTargetMistake: previous.hadTargetMistake || outcome.hadTargetMistake,
     })

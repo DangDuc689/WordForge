@@ -18,9 +18,11 @@ import {
 import { useApp } from '../context/AppContext'
 import type { PartOfSpeech, VocabularyItem } from '../domain/types'
 import { senseCefr, senseMeanings, senseParts, vocabularySenses } from '../domain/vocabulary'
+import { useTts } from '../lib/tts'
 
 export function VocabularyPage() {
   const { snapshot, archiveWord, deleteWord, saveDeck, deleteDeck } = useApp()
+  const { speak: speakTts, isLoading: isTtsLoading } = useTts(snapshot.profile.ttsVoice)
   const [query, setQuery] = useState('')
   const [deckFilter, setDeckFilter] = useState(snapshot.decks[0]?.id ?? 'all')
   const [partFilter, setPartFilter] = useState<PartOfSpeech | 'all'>('all')
@@ -89,12 +91,7 @@ export function VocabularyPage() {
 
   const speak = (e: React.MouseEvent, word: string) => {
     e.stopPropagation() // Prevent flipping card on button click (Fitts's Law)
-    if (!('speechSynthesis' in window)) return
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(word)
-    utterance.lang = 'en-US'
-    utterance.rate = 0.85
-    window.speechSynthesis.speak(utterance)
+    void speakTts(word)
   }
 
   return (
@@ -240,6 +237,8 @@ export function VocabularyPage() {
                         <button
                           className="speak-button icon-button mini"
                           onClick={(e) => speak(e, word.english)}
+                          disabled={isTtsLoading(word.english)}
+                          aria-busy={isTtsLoading(word.english)}
                           aria-label={`Phát âm ${word.english}`}
                           title="Phát âm"
                         >
@@ -326,6 +325,8 @@ export function VocabularyPage() {
                             e.stopPropagation()
                             speak(e, word.english)
                           }}
+                          disabled={isTtsLoading(word.english)}
+                          aria-busy={isTtsLoading(word.english)}
                           title="Nghe phát âm"
                           aria-label={`Nghe phát âm ${word.english}`}
                         >
@@ -365,6 +366,8 @@ export function VocabularyPage() {
                   <button
                     className="action-strip-btn"
                     onClick={(e) => speak(e, word.english)}
+                    disabled={isTtsLoading(word.english)}
+                    aria-busy={isTtsLoading(word.english)}
                     title="Phát âm"
                     aria-label={`Phát âm ${word.english}`}
                   >

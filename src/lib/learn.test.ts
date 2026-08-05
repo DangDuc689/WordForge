@@ -67,6 +67,7 @@ function createMockSnapshot(opts: {
       newWordsPerSession: 10,
       desiredRetention: 0.9,
       aiEnabled: false,
+      ttsVoice: 'en-US-EmmaMultilingualNeural',
       createdAt: '',
       updatedAt: ''
     },

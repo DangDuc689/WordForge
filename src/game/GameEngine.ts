@@ -326,7 +326,7 @@ export class GameEngine {
   private kill(monster: Monster, usedHint: boolean) {
     if (monster.dying || monster.killed) return
     monster.dying = .28; monster.killed = true
-    const responseMs = Math.max(200, (this.state.time - monster.spawnAt) * 1000)
+    const responseMs = Math.round(Math.max(200, (this.state.time - monster.spawnAt) * 1000))
     const wasHinted = usedHint || monster.hintUntil > this.state.time
     this.outcomes.push({ vocabularyId: monster.word.id, terminal: 'killed', responseMs, usedHint: wasHinted, hadTargetMistake: this.targetMistakes.has(monster.word.id) })
     if (this.state.time - this.lastKillAt > 4) this.state.combo = 0
@@ -342,7 +342,7 @@ export class GameEngine {
     monster.dying = -1
     this.shakeTimer = 0.45
     this.state.hp = Math.max(0, this.state.hp - DAMAGE[monster.word.tier]); this.state.combo = 0; this.state.multiplier = 1
-    this.outcomes.push({ vocabularyId: monster.word.id, terminal: 'breached', responseMs: Math.max(200, (this.state.time - monster.spawnAt) * 1000), usedHint: monster.hintUntil > this.state.time, hadTargetMistake: this.targetMistakes.has(monster.word.id) })
+    this.outcomes.push({ vocabularyId: monster.word.id, terminal: 'breached', responseMs: Math.round(Math.max(200, (this.state.time - monster.spawnAt) * 1000)), usedHint: monster.hintUntil > this.state.time, hadTargetMistake: this.targetMistakes.has(monster.word.id) })
     if (!this.state.missed.some((word) => word.id === monster.word.id)) this.state.missed.push(monster.word)
     this.beep(95, .18, 'sawtooth')
     if (this.state.hp <= 0) {

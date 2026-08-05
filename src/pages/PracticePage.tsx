@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import type { PracticeSession, AiPracticeSet } from '../domain/types'
@@ -6,6 +6,7 @@ import { generatePractice } from '../lib/ai'
 import { createLocalDictationSet, diffSentence, isSentenceCorrect } from '../lib/dictation'
 import { Link } from 'react-router-dom'
 import { TypingDialogue } from '../components/TypingDialogue'
+import { useTts } from '../lib/tts'
 
 const IconBookOpen = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
@@ -88,6 +89,7 @@ function HighlightedText({ text, glossary }: { text: string; glossary?: { englis
 
 export function PracticePage() {
   const { snapshot, savePractice, updatePracticeSession } = useApp()
+  const { speak: speakTts, isLoading: isTtsLoading, prefetch } = useTts(snapshot.profile.ttsVoice)
   const [deckId, setDeckId] = useState<string>('all')
   const [format, setFormat] = useState<'reading' | 'dialogue' | 'dictation'>('reading')
   const [session, setSession] = useState<PracticeSession | null>(null)
@@ -99,16 +101,30 @@ export function PracticePage() {
   const [dialogueTypingDone, setDialogueTypingDone] = useState(false)
   const questionsRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => {
+    if (session) {
+      void (async () => {
+        if (session.format === 'dictation' && session.content.dictations) {
+          for (const d of session.content.dictations) {
+            await prefetch(d.sentence, 'normal')
+            await prefetch(d.sentence, 'slow')
+          }
+        } else if (session.format === 'dialogue') {
+          const lines = session.content.passage.split(/\\n|\n/).map(l => l.trim()).filter(Boolean)
+          for (const line of lines) {
+            const match = line.match(/^([A-Za-z0-9\s]+):(.*)$/)
+            const text = match ? match[2].trim() : line
+            if (text) await prefetch(text, 'normal')
+          }
+        }
+      })()
+    }
+  }, [session, prefetch])
+
   const hasEnoughWords = snapshot.cards.length >= 3
 
   const speakSentence = (text: string, rate: number = 1.0) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = 'en-US'
-      utterance.rate = rate
-      window.speechSynthesis.speak(utterance)
-    }
+    void speakTts(text, rate <= 0.8 ? 'slow' : 'normal')
   }
 
   const create = async () => {
@@ -328,17 +344,21 @@ export function PracticePage() {
                                 type="button"
                                 className="button mini primary"
                                 onClick={() => speakSentence(item.sentence, 1.0)}
-                                title="Nghe câu tốc độ chuẩn (1.0x)"
+                                disabled={isTtsLoading(item.sentence)}
+                                aria-busy={isTtsLoading(item.sentence)}
+                                title="Nghe câu"
                               >
-                                <IconVolume2 size={14} /> Nghe (1.0x)
+                                <IconVolume2 size={14} /> Nghe
                               </button>
                               <button
                                 type="button"
                                 className="button mini secondary"
                                 onClick={() => speakSentence(item.sentence, 0.75)}
-                                title="Nghe chậm (0.75x)"
+                                disabled={isTtsLoading(item.sentence, 'slow')}
+                                aria-busy={isTtsLoading(item.sentence, 'slow')}
+                                title="Nghe chậm"
                               >
-                                <IconVolume2 size={14} /> 🐢 Chậm (0.75x)
+                                <IconVolume2 size={14} /> 🐢 Chậm
                               </button>
                               <button
                                 type="button"

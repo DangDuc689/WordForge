@@ -3,6 +3,8 @@ export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | ''
 export type VocabularyStatus = 'active' | 'archived'
 export type VocabularySource = 'manual' | 'starter' | 'oxford-3000'
 export type ReviewMode = 'learn' | 'review' | 'game-typing' | 'game-touch' | 'ai-quiz'
+export type TtsVoice = 'en-US-EmmaMultilingualNeural' | 'en-US-AriaNeural' | 'en-GB-SoniaNeural'
+export const DEFAULT_TTS_VOICE: TtsVoice = 'en-US-EmmaMultilingualNeural'
 /** The six fixed memory levels used by the review schedule. */
 export type ReviewRating = 1 | 2 | 3 | 4 | 5 | 6
 
@@ -12,6 +14,7 @@ export interface Profile {
   newWordsPerSession: number
   desiredRetention: number
   aiEnabled: boolean
+  ttsVoice: TtsVoice
   createdAt: string
   updatedAt: string
 }

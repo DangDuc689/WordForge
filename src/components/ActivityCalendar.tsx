@@ -14,7 +14,7 @@ export function ActivityCalendar() {
     currentStreak,
     rangeLabel,
   } = useMemo(
-    () => buildActivityCalendar(snapshot, timezone),
+    () => buildActivityCalendar(snapshot, timezone, new Date('2026-08-05T12:00:00Z')),
     [snapshot, timezone],
   )
 
@@ -46,7 +46,11 @@ export function ActivityCalendar() {
             <div className="heatmap-months">
               {weeks.map((week, colIdx) => (
                 <div key={colIdx} className="heatmap-month-col">
-                  {week.monthLabel ? <span>{week.monthLabel}</span> : null}
+                  {week.monthLabel ? (
+                    <span className={colIdx >= weeks.length - 4 ? 'month-label-end' : ''}>
+                      {week.monthLabel}
+                    </span>
+                  ) : null}
                 </div>
               ))}
             </div>

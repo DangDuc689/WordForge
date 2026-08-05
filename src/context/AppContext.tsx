@@ -12,6 +12,7 @@ import type {
   ReviewMode,
   VocabularyItem,
 } from '../domain/types'
+import { DEFAULT_TTS_VOICE } from '../domain/types'
 import { CloudRepository, LocalRepository, type AppRepository } from '../data/repository'
 import { loadOxfordCatalog, type OxfordLevel } from '../data/oxfordCatalog'
 import { STARTER_WORDS } from '../data/starterWords'
@@ -42,7 +43,7 @@ interface AppValue {
   importOxfordLevels: (levels: OxfordLevel[]) => Promise<VocabularyImportResult>
   reviewWord: (input: ReviewInput) => Promise<void>
   recordGame: (request: GameSaveRequest) => Promise<void>
-  updateProfile: (input: Partial<Pick<Profile, 'newWordsPerSession' | 'desiredRetention' | 'aiEnabled' | 'timezone'>>) => Promise<void>
+  updateProfile: (input: Partial<Pick<Profile, 'newWordsPerSession' | 'desiredRetention' | 'aiEnabled' | 'timezone' | 'ttsVoice'>>) => Promise<void>
   savePractice: (deckId: string | null, format: 'reading' | 'quiz' | 'dialogue' | 'dictation', targetIds: string[], content: AiPracticeSet, score?: number | null) => Promise<PracticeSession>
   updatePracticeSession: (session: PracticeSession) => Promise<void>
   exportBackup: () => void
@@ -71,6 +72,7 @@ function createInitialSnapshot(userId: string): AppSnapshot {
       newWordsPerSession: 10,
       desiredRetention: 0.9,
       aiEnabled: false,
+      ttsVoice: DEFAULT_TTS_VOICE,
       createdAt: now,
       updatedAt: now,
     },
@@ -467,7 +469,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const legacyBackup = (parsed.cards ?? []).some((item) => !(item.memoryLevel >= 1 && item.memoryLevel <= 6))
         const rebound: AppSnapshot = {
           ...parsed,
-          profile: { ...parsed.profile, id: userId, updatedAt: nowIso() },
+          profile: { ...parsed.profile, id: userId, ttsVoice: parsed.profile.ttsVoice ?? DEFAULT_TTS_VOICE, updatedAt: nowIso() },
           decks: parsed.decks.map((item) => ({ ...item, userId, source: item.source ?? 'manual', sourceKey: item.sourceKey ?? '' })),
           vocabulary: parsed.vocabulary.map((item) => ({ ...item, userId, source: item.source ?? 'manual', sourceKey: item.sourceKey ?? '' })),
           cards: (parsed.cards ?? []).map((item) => ({ ...item, userId, memoryLevel: item.memoryLevel >= 1 && item.memoryLevel <= 6 ? item.memoryLevel : (item.lastRating === 4 ? 6 : item.lastRating === 3 ? 4 : item.lastRating === 2 ? 2 : 1) })),

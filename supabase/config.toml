@@ -5,3 +5,7 @@ verify_jwt = true
 
 [functions.ai-generate-practice]
 verify_jwt = true
+
+[functions.tts-synthesize]
+verify_jwt = true
+import_map = "./functions/tts-synthesize/deno.json"

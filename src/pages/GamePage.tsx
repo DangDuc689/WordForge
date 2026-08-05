@@ -129,7 +129,7 @@ export function GamePage() {
   speedRef.current = speedMultiplier
   const recordGameRef = useRef(recordGame)
   recordGameRef.current = recordGame
-  const pool = useMemo(() => buildGamePool(snapshot.vocabulary, snapshot.cards, deckId, new Date(), { source, selectedIds: source === 'due' ? selectedIds : undefined }), [deckId, selectedIds, snapshot.cards, snapshot.vocabulary, source])
+  const pool = useMemo(() => buildGamePool(snapshot.vocabulary, snapshot.cards, deckId, new Date(), { source, selectedIds: source === 'due' ? selectedIds : undefined, limit: source === 'due' && selectedIds.length > 0 ? selectedIds.length : undefined }), [deckId, selectedIds, snapshot.cards, snapshot.vocabulary, source])
   const inputMode: 'typing' | 'touch' = typeof window !== 'undefined' && (matchMedia('(pointer: coarse)').matches || window.innerWidth < 760) ? 'touch' : 'typing'
   const redirectTimerRef = useRef<number | null>(null)
 
@@ -167,10 +167,10 @@ export function GamePage() {
                 redirectTimerRef.current = window.setTimeout(() => window.location.replace('/review'), 1200)
               }
             })
-            .catch((err) => {
+            .catch((err: any) => {
               console.error('Failed to save game:', err)
               setSaveStatus('failed')
-              setSaveError(err instanceof Error ? err.message : 'Lỗi kết nối')
+              setSaveError(err?.message || (typeof err === 'string' ? err : 'Lỗi kết nối'))
             })
         }))
       },
@@ -231,10 +231,10 @@ export function GamePage() {
           redirectTimerRef.current = window.setTimeout(() => window.location.replace('/review'), 1200)
         }
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error('Failed to save game:', err)
         setSaveStatus('failed')
-        setSaveError(err instanceof Error ? err.message : 'Lỗi kết nối')
+        setSaveError(err?.message || (typeof err === 'string' ? err : 'Lỗi kết nối'))
       })
   }
 

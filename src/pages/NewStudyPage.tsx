@@ -5,6 +5,7 @@ import type { VocabularyItem } from '../domain/types'
 import { vocabularySenses } from '../domain/vocabulary'
 import { isAcceptedAnswer } from '../lib/normalize'
 import { isDue } from '../lib/srs'
+import { useTts } from '../lib/tts'
 
 type Tab = 'flashcard' | 'meaning' | 'word' | 'example'
 
@@ -25,16 +26,6 @@ function SpeakerIcon({ className = '' }: { className?: string }) {
   )
 }
 
-const speakText = (text: string) => {
-  if (!('speechSynthesis' in window) || !text) return
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'en-US'
-  speechSynthesis.cancel()
-  speechSynthesis.speak(u)
-}
-
-const speak = (w: VocabularyItem) => speakText(w.english)
-
 const Stats = ({ total, learn, review }: { total: number; learn: number; review: number }) => (
   <div className="learn-stats">
     <div className="learn-stat total"><strong>{total}</strong><span>TỔNG SỐ TỪ</span></div>
@@ -53,6 +44,9 @@ export function NewStudyPage() {
     nextLearnWord,
     generateNextBatchAction
   } = useApp()
+  const { speak: speakTts, isLoading: isTtsLoading, prefetch } = useTts(snapshot.profile.ttsVoice)
+  const speak = (w: VocabularyItem) => { void speakTts(w.english) }
+  const speakText = (text: string) => { void speakTts(text) }
 
   const [tab, setTab] = useState<Tab>('flashcard')
   
@@ -65,6 +59,15 @@ export function NewStudyPage() {
   const [isFlipped, setIsFlipped] = useState(false)
   const [showVi, setShowVi] = useState(false)
   const started = useRef(Date.now())
+  const exampleInputRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (tab === 'example') {
+      setTimeout(() => {
+        exampleInputRef.current?.focus()
+      }, 50)
+    }
+  }, [tab])
 
   // Automatically generate next batch if status is idle and queue is empty
   useEffect(() => {
@@ -89,6 +92,10 @@ export function NewStudyPage() {
     const reps = snapshot.cards.find((card) => card.vocabularyId === queuedWord.id)?.reps ?? 0
     return { ...queuedWord, ...senses[reps % senses.length], sourceKey: queuedWord.sourceKey }
   }, [queuedWord, snapshot.cards])
+
+  useEffect(() => {
+    if (word) void prefetch(word.english)
+  }, [word, prefetch])
 
   const choices = useMemo(() => {
     if (!word) return []
@@ -211,7 +218,7 @@ export function NewStudyPage() {
         if (e.key === 'Enter' && checked) {
           e.preventDefault()
           if (correct) handleNextTab()
-          else setChecked(false)
+          else { setChecked(false); setAnswer(''); }
         }
       } else if (tab === 'example') {
         if (e.key === 'Enter') {
@@ -221,7 +228,7 @@ export function NewStudyPage() {
           } else if (checked) {
             e.preventDefault()
             if (correct) void nextWord(true)
-            else setChecked(false)
+            else { setChecked(false); setAnswer(''); }
           }
         }
       }
@@ -340,7 +347,8 @@ export function NewStudyPage() {
                     <button 
                       type="button" 
                       className="speaker-btn"
-                      disabled={busy || savingSession} 
+                      disabled={busy || savingSession || isTtsLoading(word.english)}
+                      aria-busy={isTtsLoading(word.english)}
                       onClick={(e) => { e.stopPropagation(); speak(word); }}
                       title="Phát âm"
                     >
@@ -396,7 +404,7 @@ export function NewStudyPage() {
           <div className="question-heading">CHỌN NGHĨA ĐÚNG</div>
           <h1>
             {word.english} <em>({word.partOfSpeech})</em>{' '}
-            <button type="button" className="speaker-btn" disabled={busy || savingSession} onClick={() => speak(word)} title="Nghe phát âm">
+            <button type="button" className="speaker-btn" disabled={busy || savingSession || isTtsLoading(word.english)} aria-busy={isTtsLoading(word.english)} onClick={() => speak(word)} title="Nghe phát âm">
               <SpeakerIcon />
             </button>
           </h1>
@@ -457,7 +465,8 @@ export function NewStudyPage() {
             <button 
               type="button" 
               className="speaker-button-icon" 
-              disabled={busy || savingSession} 
+              disabled={busy || savingSession || isTtsLoading(word.english)}
+              aria-busy={isTtsLoading(word.english)}
               onClick={() => speak(word)}
               title="Nghe phát âm"
             >
@@ -471,7 +480,7 @@ export function NewStudyPage() {
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
               <span>{correct ? 'Chính xác!' : `Chưa đúng. Đáp án đúng: "${word.english}"`}</span>
-              <button disabled={busy || savingSession} onClick={() => correct ? handleNextTab() : setChecked(false)}>
+              <button disabled={busy || savingSession} onClick={() => correct ? handleNextTab() : (setChecked(false), setAnswer(''))}>
                 {correct ? 'Tiếp tục →' : 'Thử lại'}
               </button>
             </div>
@@ -484,7 +493,7 @@ export function NewStudyPage() {
           <div className="question-heading">ĐẶT CÂU VỚI TỪ VỰNG</div>
           <h1>
             {word.english} <em>({word.partOfSpeech})</em>{' '}
-            <button type="button" className="speaker-btn" disabled={busy || savingSession} onClick={() => speak(word)} title="Nghe phát âm">
+            <button type="button" className="speaker-btn" disabled={busy || savingSession || isTtsLoading(word.english)} aria-busy={isTtsLoading(word.english)} onClick={() => speak(word)} title="Nghe phát âm">
               <SpeakerIcon />
             </button>
           </h1>
@@ -501,13 +510,15 @@ export function NewStudyPage() {
             <b>Ví dụ mẫu {word.exampleVi && <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--faint)', marginLeft: '0.5rem' }}>(Chạm để xem dịch)</span>}</b>
             <p>{example}</p>
             {showVi && word.exampleVi && <p className="vi-subtext">{word.exampleVi}</p>}
-            <button type="button" className="speaker-btn-small" disabled={busy || savingSession} onClick={(e) => { e.stopPropagation(); speakText(example); }} title="Nghe câu ví dụ">
+            <button type="button" className="speaker-btn-small" disabled={busy || savingSession || isTtsLoading(example)} aria-busy={isTtsLoading(example)} onClick={(e) => { e.stopPropagation(); speakText(example); }} title="Nghe câu ví dụ">
               <SpeakerIcon />
             </button>
           </div>
 
           <form onSubmit={checkExample}>
             <textarea 
+              ref={exampleInputRef}
+              autoFocus
               value={answer} 
               onChange={e => setAnswer(e.target.value)} 
               onKeyDown={e => {
@@ -517,7 +528,7 @@ export function NewStudyPage() {
                     checkExample({ preventDefault: () => {} } as FormEvent)
                   } else if (checked) {
                     if (correct) void nextWord(true)
-                    else setChecked(false)
+                    else { setChecked(false); setAnswer(''); }
                   }
                 }
               }}
@@ -542,7 +553,7 @@ export function NewStudyPage() {
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
               <span>{correct ? 'Hoàn thành từ vựng này!' : 'Hãy đảm bảo bạn đã dùng đúng từ vựng trong câu.'}</span>
-              <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : setChecked(false)}>
+              <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : (setChecked(false), setAnswer(''))}>
                 {correct ? 'Hoàn thành →' : 'Thử lại'}
               </button>
             </div>
@@ -552,5 +563,3 @@ export function NewStudyPage() {
     </div>
   )
 }
-
-

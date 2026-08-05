@@ -3,6 +3,8 @@ import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
+import { useTts, TTS_VOICES } from '../lib/tts'
+import { DEFAULT_TTS_VOICE } from '../domain/types'
 
 /* ── Minimal 2px-stroke line-art icons ─────────────────────────────── */
 const IconSun = ({ size = 20 }: { size?: number }) => (
@@ -43,6 +45,12 @@ const IconArchive = ({ size = 18 }: { size?: number }) => (
 const IconUser = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+)
+
+const IconHeadphones = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z"/><path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
   </svg>
 )
 
@@ -132,6 +140,8 @@ export function SettingsPage() {
   const { snapshot, updateProfile, exportBackup, importBackup } = useApp()
   const { isLocalMode, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
+  const selectedVoice = snapshot.profile.ttsVoice ?? DEFAULT_TTS_VOICE
+  const { speak, isLoading: isTtsLoading } = useTts(selectedVoice)
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
@@ -200,6 +210,32 @@ export function SettingsPage() {
           <div className="privacy-note">
             <IconInfo size={13} />
             Gemini API sẽ nhận nội dung request để tạo phản hồi. Không gửi email hoặc dữ liệu nhận dạng; chỉ gửi từ mục tiêu và từ nền đã biết.
+          </div>
+        </section>
+
+        <section className="panel settings-section no-lift">
+          <SectionHeader icon={<IconHeadphones />} title="Giọng đọc" subtitle="Edge Neural TTS khi dùng Supabase, trình duyệt khi offline" />
+          <label className="settings-field-row" htmlFor="tts-voice-select">
+            <span className="settings-field-label"><IconHeadphones />Giọng tiếng Anh</span>
+            <select
+              id="tts-voice-select"
+              value={selectedVoice}
+              onChange={e => void updateProfile({ ttsVoice: e.target.value as typeof selectedVoice })}
+              className="settings-select"
+            >
+              {TTS_VOICES.map((voice) => <option key={voice.value} value={voice.value}>{voice.label} — {voice.description}</option>)}
+            </select>
+          </label>
+          <div className="button-row">
+            <button
+              className="button ghost"
+              type="button"
+              onClick={() => void speak('Hello, let us learn English together.')}
+              disabled={isTtsLoading('Hello, let us learn English together.')}
+              aria-busy={isTtsLoading('Hello, let us learn English together.')}
+            >
+              <IconHeadphones size={14} /> Nghe thử
+            </button>
           </div>
         </section>
 

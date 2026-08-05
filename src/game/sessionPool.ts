@@ -7,6 +7,7 @@ export type GamePoolSource = 'due' | 'all'
 export interface GamePoolOptions {
   source?: GamePoolSource
   selectedIds?: readonly string[]
+  limit?: number
 }
 
 export function buildGamePool(
@@ -28,7 +29,7 @@ export function buildGamePool(
       const priority = (card: SrsCard | undefined) => !card ? 2 : isDue(card, now) ? 0 : (card.lapses > 0 || card.memoryLevel <= 2) ? 1 : 3
       return priority(cardA) - priority(cardB) || a.tier - b.tier
     })
-    .slice(0, 60)
+    .slice(0, options.limit ?? 60)
     .map((word) => {
       const card = cardMap.get(word.id)
       const senses = vocabularySenses(word)

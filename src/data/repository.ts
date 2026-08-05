@@ -9,6 +9,7 @@ import type {
   SrsCard,
   VocabularyItem,
 } from '../domain/types'
+import { DEFAULT_TTS_VOICE } from '../domain/types'
 import { deduplicateSnapshot } from '../domain/vocabulary'
 import { supabase } from '../lib/supabase'
 
@@ -116,8 +117,14 @@ function upsert<T extends { id: string }>(items: T[], item: T): T[] {
   return items.map((current) => current.id === item.id ? item : current)
 }
 
+const INTEGER_KEYS = new Set(['responseMs', 'response_ms', 'durationSeconds', 'duration_seconds', 'score', 'wave', 'accuracy', 'reps', 'lapses', 'state', 'memoryLevel', 'memory_level', 'lastRating', 'last_rating', 'learningSteps', 'learning_steps', 'scheduledDays', 'scheduled_days'])
+
 const toSnake = (value: Record<string, unknown>) => Object.fromEntries(
-  Object.entries(value).map(([key, item]) => [key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`), item]),
+  Object.entries(value).map(([key, item]) => {
+    const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+    const finalVal = typeof item === 'number' && INTEGER_KEYS.has(key) ? Math.round(item) : item
+    return [snakeKey, finalVal]
+  }),
 )
 
 const toCamel = (value: Record<string, unknown>) => Object.fromEntries(
@@ -144,6 +151,7 @@ function prepareSnapshot(snapshot: AppSnapshot): AppSnapshot {
   const deckSources = new Map(decks.map((deck) => [deck.id, deck.source]))
   return {
     ...snapshot,
+    profile: { ...snapshot.profile, ttsVoice: snapshot.profile.ttsVoice ?? DEFAULT_TTS_VOICE },
     decks,
     vocabulary: (snapshot.vocabulary ?? []).map((word) => ({
       ...word,

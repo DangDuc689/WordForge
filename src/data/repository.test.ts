@@ -6,9 +6,20 @@ const storageKey = 'vocab-siege.snapshot.v1'
 describe('legacy backup compatibility', () => {
   beforeEach(() => localStorage.clear())
 
-  it('maps old FSRS ratings to six-level memory data when loading', async () => {
+  it('defaults the TTS voice for snapshots created before the voice setting existed', async () => {
     localStorage.setItem(storageKey, JSON.stringify({
       profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, createdAt: '', updatedAt: '' },
+      decks: [{ id: 'd', userId: 'u', name: 'Starter', description: '', createdAt: '', updatedAt: '' }],
+      vocabulary: [], cards: [], reviews: [], gameRuns: [], practiceSessions: [],
+    }))
+
+    const snapshot = await new LocalRepository().load()
+    expect(snapshot?.profile.ttsVoice).toBe('en-US-EmmaMultilingualNeural')
+  })
+
+  it('maps old FSRS ratings to six-level memory data when loading', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({
+      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, ttsVoice: 'en-US-EmmaMultilingualNeural', createdAt: '', updatedAt: '' },
       decks: [], vocabulary: [], gameRuns: [], practiceSessions: [],
       cards: [{ id: 'c', userId: 'u', vocabularyId: 'v', dueAt: '', stability: 1, difficulty: 1, elapsedDays: 0, scheduledDays: 1, learningSteps: 0, reps: 2, lapses: 0, state: 2, lastReviewAt: '', lastRating: 4, createdAt: '', updatedAt: '' }],
       reviews: [{ id: 'r', userId: 'u', vocabularyId: 'v', mode: 'review', rating: 4, correct: true, responseMs: 1, usedHint: false, submittedAnswer: '', reviewedAt: '' }],
@@ -22,7 +33,7 @@ describe('legacy backup compatibility', () => {
 
   it('normalizes source metadata and saves vocabulary in one local batch', async () => {
     localStorage.setItem(storageKey, JSON.stringify({
-      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, createdAt: '', updatedAt: '' },
+      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, ttsVoice: 'en-US-EmmaMultilingualNeural', createdAt: '', updatedAt: '' },
       decks: [{ id: 'd', userId: 'u', name: 'Oxford 3000 · A1', description: '', createdAt: '', updatedAt: '' }],
       vocabulary: [], cards: [], reviews: [], gameRuns: [], practiceSessions: [],
     }))
@@ -63,7 +74,7 @@ describe('legacy backup compatibility', () => {
 
   it('upserts game runs and reviews safely to prevent duplication on retry', async () => {
     localStorage.setItem(storageKey, JSON.stringify({
-      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, createdAt: '', updatedAt: '' },
+      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, ttsVoice: 'en-US-EmmaMultilingualNeural', createdAt: '', updatedAt: '' },
       decks: [], vocabulary: [], cards: [], reviews: [], gameRuns: [], practiceSessions: [],
     }))
     const repository = new LocalRepository()

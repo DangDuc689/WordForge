@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
-import type { VocabularyItem } from '../domain/types'
+import type { TtsVoice, VocabularyItem } from '../domain/types'
 import { senseMeanings, vocabularySenses } from '../domain/vocabulary'
 import { isAcceptedAnswer } from '../lib/normalize'
 import { isDue, memoryLevelInfo, nextMemoryLevel } from '../lib/srs'
 import { NewStudyPage } from './NewStudyPage'
+import { useTts } from '../lib/tts'
 
 type Phase = 'entry' | 'preview' | 'question' | 'result'
 
@@ -70,6 +71,7 @@ function MemoryLevelList({
   onReset,
   adjustingId,
   onClose,
+  voice,
 }: { 
   level: number, 
   words: (VocabularyItem & { dueAt: string })[], 
@@ -77,18 +79,15 @@ function MemoryLevelList({
   onReset: (id: string) => void,
   adjustingId: string | null,
   onClose?: () => void,
+  voice: TtsVoice,
 }) {
   const info = memoryLevelInfo(level as any)
   const [search, setSearch] = useState('')
+  const { speak: speakTts, isLoading: isTtsLoading } = useTts(voice)
 
   const handlePlayAudio = (e: React.MouseEvent, text: string) => {
     e.stopPropagation()
-    if (!('speechSynthesis' in window)) return
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'en-US'
-    utterance.rate = 0.88
-    window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(utterance)
+    void speakTts(text)
   }
 
   const filteredWords = useMemo(() => {
@@ -158,6 +157,8 @@ function MemoryLevelList({
                         type="button" 
                         className="word-audio-btn" 
                         onClick={(e) => handlePlayAudio(e, word.english)}
+                        disabled={isTtsLoading(word.english)}
+                        aria-busy={isTtsLoading(word.english)}
                         title="Nghe phát âm"
                       >
                         <SpeakerIcon className="audio-icon" />
@@ -232,6 +233,7 @@ export function StudyPage() {
   const navigate = useNavigate()
   const mode = pathname === '/learn' ? 'learn' : 'review'
   const { snapshot, reviewWord, adjustMemoryLevel } = useApp()
+  const { speak: speakTts, isLoading: isTtsLoading, prefetch } = useTts(snapshot.profile.ttsVoice)
   const [selectedMemoryLevel, setSelectedMemoryLevel] = useState<number | null>(null)
   const [adjustingId, setAdjustingId] = useState<string | null>(null)
 
@@ -342,6 +344,10 @@ export function StudyPage() {
     return { ...currentWord, ...senses[reps % senses.length], sourceKey: currentWord.sourceKey }
   }, [currentWord, snapshot.cards])
 
+  useEffect(() => {
+    if (current) void prefetch(current.english)
+  }, [current, prefetch])
+
   const getMemoryLevel = (vocabularyId: string) => {
     const card = snapshot.cards.find(c => c.vocabularyId === vocabularyId)
     if (!card) return { label: 'MỚI', color: 'var(--faint)' }
@@ -405,12 +411,7 @@ export function StudyPage() {
   }, [phase, busy, current?.id, correct])
 
   const speak = (word: VocabularyItem) => {
-    if (!('speechSynthesis' in window)) return
-    const utterance = new SpeechSynthesisUtterance(word.english)
-    utterance.lang = 'en-US'
-    utterance.rate = 0.85
-    window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(utterance)
+    void speakTts(word.english)
   }
 
   // Step 3: All words finished or empty queue
@@ -433,7 +434,7 @@ export function StudyPage() {
           <p className="total-learned">Tổng số từ đã học: <br /><strong>{memoryStats.learnedCount.toLocaleString()}</strong><span>/{activeIds.size}</span></p>
           
           <MemoryBarChart stats={memoryStats.stats} maxCount={memoryStats.maxCount} selectedLevel={selectedMemoryLevel} onSelectLevel={setSelectedMemoryLevel} />
-          {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} />}
+          {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} voice={snapshot.profile.ttsVoice} />}
         </div>
 
         <section className="panel empty-study">
@@ -473,7 +474,7 @@ export function StudyPage() {
             <p className="total-learned">Tổng số từ đã học: <br /><strong>{memoryStats.learnedCount.toLocaleString()}</strong><span>/{activeIds.size}</span></p>
             
             <MemoryBarChart stats={memoryStats.stats} maxCount={memoryStats.maxCount} selectedLevel={selectedMemoryLevel} onSelectLevel={setSelectedMemoryLevel} />
-            {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} onClose={() => setSelectedMemoryLevel(null)} />}
+            {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} voice={snapshot.profile.ttsVoice} onClose={() => setSelectedMemoryLevel(null)} />}
           </div>
 
           <div className="panel review-action-card">
@@ -612,7 +613,7 @@ export function StudyPage() {
               {phase === 'preview' ? (
                 <>
                   <h2 className="card-prompt-title">{current.english}</h2>
-                  <button className="card-audio-btn" onClick={() => speak(current)} title="Phát âm">
+                  <button className="card-audio-btn" onClick={() => speak(current)} disabled={isTtsLoading(current.english)} aria-busy={isTtsLoading(current.english)} title="Phát âm">
                     <SpeakerIcon />
                   </button>
                   <p className="card-ipa">{current.ipa || 'Chưa có IPA'}</p>
@@ -659,7 +660,7 @@ export function StudyPage() {
 
             <div className="card-body-content">
               <h2 className="card-prompt-title" style={{ fontSize: '1.8rem' }}>{current.vietnamese}</h2>
-              <button className="card-audio-btn" onClick={() => speak(current)} title="Phát âm">
+              <button className="card-audio-btn" onClick={() => speak(current)} disabled={isTtsLoading(current.english)} aria-busy={isTtsLoading(current.english)} title="Phát âm">
                 <SpeakerIcon />
               </button>
               

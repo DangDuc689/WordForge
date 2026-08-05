@@ -28,6 +28,7 @@ function snapshot(overrides: Partial<AppSnapshot> = {}): AppSnapshot {
       newWordsPerSession: 10,
       desiredRetention: 0.9,
       aiEnabled: false,
+      ttsVoice: 'en-US-EmmaMultilingualNeural',
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
     },

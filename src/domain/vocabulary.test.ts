@@ -23,7 +23,7 @@ describe('vocabulary headword deduplication', () => {
 
   it('merges senses and preserves the strongest progress and references', () => {
     const snapshot: AppSnapshot = {
-      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, createdAt: '', updatedAt: '' },
+      profile: { id: 'u', timezone: 'UTC', newWordsPerSession: 10, desiredRetention: 0.9, aiEnabled: false, ttsVoice: 'en-US-EmmaMultilingualNeural', createdAt: '', updatedAt: '' },
       decks: [{ id: 'd', userId: 'u', name: 'A1', description: '', source: 'oxford-3000', sourceKey: 'oxford-3000:a1', createdAt: '', updatedAt: '' }],
       vocabulary: [word('w1', 'across', 'băng qua', 'preposition'), word('w2', ' Across ', 'sang phía bên kia', 'adverb')],
       cards: [card('c1', 'w1', 2, 3), card('c2', 'w2', 5, 7)],
