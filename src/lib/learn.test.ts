@@ -106,7 +106,7 @@ describe('sanitizeLearnSession', () => {
     expect(sanitized.selectedDeckId).toBe('d1')
   })
 
-  it('filters queueIds and deferredIds (removes duplicates, learned, non-active, or mismatched deck)', () => {
+  it('filters queueIds and deferredIds (removes duplicates, learned, or mismatched deck)', () => {
     const snapshot = createMockSnapshot({
       decks: [{ id: 'd1', name: 'Deck 1' }, { id: 'd2', name: 'Deck 2' }],
       vocabulary: [
@@ -126,11 +126,11 @@ describe('sanitizeLearnSession', () => {
 
     const sanitized = sanitizeLearnSession(session, snapshot)
 
-    // queueIds should only have w1 (w2 is learned, w3 is archived, w4 is deck 2, w-nonexistent does not exist, duplicates removed)
-    expect(sanitized.queueIds).toEqual(['w1'])
+    // queueIds should only have w1, w3 (w2 is learned, w4 is deck 2, w-nonexistent does not exist, duplicates removed)
+    expect(sanitized.queueIds).toEqual(['w1', 'w3'])
 
-    // deferredIds should have w1 and w4 (global, so w4 is kept since it is active and unlearned, w2 is learned, w3 is archived)
-    expect(sanitized.deferredIds).toEqual(['w1', 'w4'])
+    // deferredIds should have w1, w3, and w4 (global, so w4 is kept since it is unlearned, w2 is learned)
+    expect(sanitized.deferredIds).toEqual(['w1', 'w3', 'w4'])
   })
 })
 

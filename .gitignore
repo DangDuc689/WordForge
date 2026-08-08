@@ -11,3 +11,4 @@ public/catalog/**/.generation-progress.json
 Note/
 supabase/.temp/
 .codex/
+test-gemini.js

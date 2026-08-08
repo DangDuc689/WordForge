@@ -52,9 +52,9 @@ describe('buildActivityCalendar', () => {
   it('always renders seven weekday rows and keeps Tuesday, Thursday, and Saturday activity', () => {
     const data = buildActivityCalendar(snapshot({
       reviews: [
-        review('2026-06-02T12:00:00.000Z'),
-        review('2026-06-04T12:00:00.000Z'),
-        review('2026-06-06T12:00:00.000Z'),
+        review('2026-06-02T12:00:00.000Z', { mode: 'learn' }), review('2026-06-02T12:00:00.000Z', { mode: 'learn' }),
+        review('2026-06-04T12:00:00.000Z', { mode: 'learn' }), review('2026-06-04T12:00:00.000Z', { mode: 'learn' }),
+        review('2026-06-06T12:00:00.000Z', { mode: 'learn' }), review('2026-06-06T12:00:00.000Z', { mode: 'learn' }),
       ],
     }), 'UTC', NOW)
 
@@ -140,7 +140,7 @@ describe('buildActivityCalendar', () => {
       reviewedCount: 2,
       activityCount: 3,
       intensityScore: 4,
-      level: 2,
+      level: 1,
       status: 'active',
     })
     expect(day?.tooltip).toContain('Đã học 1 lượt')
@@ -157,14 +157,19 @@ describe('buildActivityCalendar', () => {
       reviews: [review(date), review(date)],
     }), 'UTC', NOW), '2026-07-28').day
 
-    expect(learnedDay).toMatchObject({ intensityScore: 4, level: 2 })
-    expect(reviewedDay).toMatchObject({ intensityScore: 2, level: 1 })
+    expect(learnedDay).toMatchObject({ intensityScore: 4, level: 1 })
+    expect(reviewedDay).toMatchObject({ intensityScore: 2, level: 0 })
   })
 
   it('marks today independently of whether today has activity', () => {
     const emptyToday = findDay(buildActivityCalendar(snapshot(), 'UTC', NOW), '2026-07-29').day
     const activeToday = findDay(buildActivityCalendar(snapshot({
-      reviews: [review('2026-07-29T08:00:00.000Z')],
+      reviews: [
+        review('2026-07-29T08:00:00.000Z'),
+        review('2026-07-29T08:00:00.000Z'),
+        review('2026-07-29T08:00:00.000Z'),
+        review('2026-07-29T08:00:00.000Z'),
+      ],
     }), 'UTC', NOW), '2026-07-29').day
 
     expect(emptyToday).toMatchObject({ isToday: true, status: 'inactive', level: 0 })
@@ -175,13 +180,14 @@ describe('buildActivityCalendar', () => {
 describe('getActivityLevel', () => {
   it.each([
     [0, 0],
-    [1, 1],
-    [2, 1],
-    [3, 2],
-    [5, 2],
-    [6, 3],
-    [10, 3],
-    [11, 4],
+    [3, 0],
+    [4, 1],
+    [11, 1],
+    [12, 2],
+    [23, 2],
+    [24, 3],
+    [43, 3],
+    [44, 4],
   ])('maps %i intensity points to level %i', (intensityScore, level) => {
     expect(getActivityLevel(intensityScore)).toBe(level)
   })

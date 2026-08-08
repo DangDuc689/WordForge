@@ -1,6 +1,6 @@
 import type { AppSnapshot } from '../domain/types'
 
-export const ACTIVITY_INTENSITY_THRESHOLDS = [1, 3, 6, 11] as const
+export const ACTIVITY_INTENSITY_THRESHOLDS = [4, 12, 24, 44] as const
 export const LEARN_INTENSITY_WEIGHT = 2
 export const REVIEW_INTENSITY_WEIGHT = 1
 

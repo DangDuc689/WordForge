@@ -1,9 +1,6 @@
-import type { GameWord, SrsCard, VocabularyItem } from '../domain/types'
+import type { GamePoolSource, GameWord, SrsCard, VocabularyItem } from '../domain/types'
 import { isDue } from '../lib/srs'
 import { vocabularySenses } from '../domain/vocabulary'
-
-export type GamePoolSource = 'due' | 'all'
-
 export interface GamePoolOptions {
   source?: GamePoolSource
   selectedIds?: readonly string[]
@@ -20,8 +17,12 @@ export function buildGamePool(
   const cardMap = new Map(cards.map((card) => [card.vocabularyId, card]))
   const selected = options.selectedIds?.length ? new Set(options.selectedIds) : null
   return vocabulary
-    .filter((word) => word.status === 'active' && (deckId === 'all' || word.deckId === deckId))
-    .filter((word) => options.source !== 'due' || isDue(cardMap.get(word.id), now))
+    .filter((word) => (deckId === 'all' || word.deckId === deckId))
+    .filter((word) => {
+      if (options.source === 'due') return isDue(cardMap.get(word.id), now)
+      if (options.source === 'learned') return cardMap.has(word.id)
+      return true
+    })
     .filter((word) => !selected || selected.has(word.id))
     .sort((a, b) => {
       const cardA = cardMap.get(a.id)

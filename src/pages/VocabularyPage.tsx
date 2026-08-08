@@ -21,12 +21,12 @@ import { senseCefr, senseMeanings, senseParts, vocabularySenses } from '../domai
 import { useTts } from '../lib/tts'
 
 export function VocabularyPage() {
-  const { snapshot, archiveWord, deleteWord, saveDeck, deleteDeck } = useApp()
+  const { snapshot, prioritizeLearnWord, deleteWord, saveDeck, deleteDeck, learnSession } = useApp()
   const { speak: speakTts, isLoading: isTtsLoading } = useTts(snapshot.profile.ttsVoice)
   const [query, setQuery] = useState('')
   const [deckFilter, setDeckFilter] = useState(snapshot.decks[0]?.id ?? 'all')
   const [partFilter, setPartFilter] = useState<PartOfSpeech | 'all'>('all')
-  const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | 'all'>('active')
+
   const [progressFilter, setProgressFilter] = useState<'all' | 'new' | 'learned' | 'review'>('all')
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
   const [flippedCardIds, setFlippedCardIds] = useState<Set<string>>(new Set())
@@ -44,16 +44,15 @@ export function VocabularyPage() {
     const needle = query.toLocaleLowerCase('vi')
     return (deckFilter === 'all' || word.deckId === deckFilter)
       && (partFilter === 'all' || senseParts(word).includes(partFilter))
-      && (statusFilter === 'all' || word.status === statusFilter)
       && (progressFilter === 'all' || (progressFilter === 'new' ? !cardsByWord.has(word.id) : progressFilter === 'learned' ? cardsByWord.has(word.id) : Boolean(cardsByWord.get(word.id) && cardsByWord.get(word.id)!.reps > 0)))
       && (!needle || word.english.toLowerCase().includes(needle) || senseMeanings(word).some((meaning) => meaning.toLocaleLowerCase('vi').includes(needle)))
-  }), [cardsByWord, deckFilter, partFilter, progressFilter, query, snapshot.vocabulary, statusFilter])
+  }), [cardsByWord, deckFilter, partFilter, progressFilter, query, snapshot.vocabulary])
   
-  const pageSize = 90
+  const pageSize = viewMode === 'table' ? 100 : 24
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const visibleWords = filtered.slice((page - 1) * pageSize, page * pageSize)
 
-  useEffect(() => { setPage(1) }, [deckFilter, partFilter, progressFilter, query, statusFilter])
+  useEffect(() => { setPage(1) }, [deckFilter, partFilter, progressFilter, query, viewMode])
   useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   // Keyboard shortcut handlers
@@ -99,7 +98,7 @@ export function VocabularyPage() {
       <PageHeader
         eyebrow="Vocabulary vault"
         title={<>Kho <span className="accent">từ vựng</span></>}
-        description={`${snapshot.vocabulary.filter((word) => word.status === 'active').length} mục từ đang hoạt động trong ${snapshot.decks.length} bộ từ.`}
+        description={`${snapshot.vocabulary.length} mục từ trong ${snapshot.decks.length} bộ từ.`}
         actions={
           <>
             <button className="button ghost" onClick={() => setShowOxford(true)}>
@@ -180,11 +179,7 @@ export function VocabularyPage() {
           <option value="other">Khác</option>
         </select>
         
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
-          <option value="active">Đang dùng</option>
-          <option value="archived">Đã lưu trữ</option>
-          <option value="all">Tất cả</option>
-        </select>
+
 
         <select value={progressFilter} onChange={(event) => setProgressFilter(event.target.value as typeof progressFilter)}>
           <option value="all">Mọi tiến độ</option>
@@ -231,7 +226,7 @@ export function VocabularyPage() {
                 const card = cardsByWord.get(word.id)
                 const state = !card ? 'Chưa học' : card.memoryLevel === 6 ? 'Nhớ sâu' : ('Cấp ' + card.memoryLevel)
                 return (
-                  <tr key={word.id} className={word.status === 'archived' ? 'archived' : ''}>
+                  <tr key={word.id}>
                     <td>
                       <div className="word-cell">
                         <button
@@ -264,7 +259,15 @@ export function VocabularyPage() {
                     </td>
                     <td className="text-right">
                       <button className="table-action" onClick={() => setEditing(word)}>Sửa</button>
-                      <button className="table-action" onClick={() => void archiveWord(word)}>{word.status === 'active' ? 'Lưu trữ' : 'Khôi phục'}</button>
+                      {!card && (
+                        <button 
+                          className={`table-action ${learnSession?.queueIds[0] === word.id ? 'active' : ''}`}
+                          onClick={() => void prioritizeLearnWord(word.id)}
+                          title={learnSession?.queueIds[0] === word.id ? "Hủy ưu tiên học từ này" : "Ưu tiên học từ này"}
+                        >
+                          {learnSession?.queueIds[0] === word.id ? 'Đã ưu tiên' : 'Ưu tiên'}
+                        </button>
+                      )}
                       <button
                         className="table-action button-danger-text"
                         onClick={() => window.confirm(`Bạn có chắc muốn xóa từ "${word.english}" không?`) && void deleteWord(word.id)}
@@ -377,9 +380,15 @@ export function VocabularyPage() {
                   <button className="action-strip-btn" onClick={() => setEditing(word)} title="Sửa từ vựng">
                     Sửa
                   </button>
-                  <button className="action-strip-btn" onClick={() => void archiveWord(word)} title={word.status === 'active' ? 'Lưu trữ từ' : 'Khôi phục từ'}>
-                    {word.status === 'active' ? 'Lưu trữ' : 'Khôi phục'}
-                  </button>
+                  {!card && (
+                    <button 
+                      className={`action-strip-btn ${learnSession?.queueIds[0] === word.id ? 'active' : ''}`}
+                      onClick={() => void prioritizeLearnWord(word.id)} 
+                      title={learnSession?.queueIds[0] === word.id ? "Hủy ưu tiên học từ này" : "Ưu tiên học từ này"}
+                    >
+                      {learnSession?.queueIds[0] === word.id ? 'Đã ưu tiên' : 'Ưu tiên'}
+                    </button>
+                  )}
                   <button
                     className="action-strip-btn danger-text"
                     onClick={() => window.confirm(`Bạn có chắc muốn xóa từ "${word.english}" không?`) && void deleteWord(word.id)}

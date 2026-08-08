@@ -137,13 +137,13 @@ export function buildDashboardStats(
   vocabulary: VocabularyItem[], cards: SrsCard[], reviews: ReviewEvent[],
   timezone = 'Asia/Saigon', now = new Date(),
 ): DashboardStats {
-  const activeIds = new Set(vocabulary.filter((item) => item.status === 'active').map((item) => item.id))
+  const activeIds = new Set(vocabulary.map((item) => item.id))
   const activeCards = cards.filter((card) => activeIds.has(card.vocabularyId))
   const reviewed = reviews.filter((event) => activeIds.has(event.vocabularyId))
   const correct = reviewed.filter((event) => event.correct).length
   const todayStr = dayKey(now, timezone)
   return {
-    newCount: vocabulary.filter((item) => item.status === 'active' && !cards.some((card) => card.vocabularyId === item.id)).length,
+    newCount: vocabulary.filter((item) => !cards.some((card) => card.vocabularyId === item.id)).length,
     learnedCount: activeCards.length,
     learningCount: activeCards.filter((card) => card.memoryLevel <= 1).length,
     dueCount: activeCards.filter((card) => isDue(card, now)).length,

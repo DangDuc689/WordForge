@@ -10,6 +10,7 @@ const links = [
   ['/review', 'Ôn tập', '↻'],
   ['/game', 'Vocab Siege', '⌁'],
   ['/practice', 'AI Practice', '◇'],
+  ['/ai-chat', 'AI Chat', '💬'],
   ['/settings', 'Cài đặt', '⚙'],
 ] as const
 

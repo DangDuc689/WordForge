@@ -110,7 +110,7 @@ export function GamePage() {
   const { snapshot, recordGame } = useApp()
   const [searchParams] = useSearchParams()
   const [deckId, setDeckId] = useState(searchParams.get('deck') ?? snapshot.decks[0]?.id ?? 'all')
-  const [source, setSource] = useState<GamePoolSource>(searchParams.get('source') === 'due' ? 'due' : 'all')
+  const [source, setSource] = useState<GamePoolSource>(searchParams.get('source') === 'due' ? 'due' : searchParams.get('source') === 'learned' ? 'learned' : 'all')
   const selectedIds = useMemo(() => searchParams.get('ids')?.split(',').filter(Boolean) ?? [], [searchParams])
   const [running, setRunning] = useState(false)
   const [hud, setHud] = useState<GameSnapshot | null>(null)
@@ -149,6 +149,7 @@ export function GamePage() {
         const req: GameSaveRequest = {
           runId: crypto.randomUUID(),
           deckId: deckId === 'all' ? null : deckId,
+          source,
           score: finalState.score, wave: finalState.wave,
           accuracy: total ? Math.round(finalState.correct / total * 100) : 100,
           durationSeconds: Math.round(finalState.time), inputMode,
@@ -268,7 +269,7 @@ export function GamePage() {
 
   if (!running) return <div className="page game-landing">
     <PageHeader eyebrow="Typing tower defense" title={<>Vocab <span className="accent">Siege</span></>} description="Mỗi từ xuất hiện đúng 2 lần với tốc độ cố định. Trận đấu kết thúc khi bạn đi hết bộ từ." />
-    <section className="game-hero panel"><div className="game-core-art"><span /><i /><b /></div><div><span className="eyebrow">Chuẩn bị phòng thủ</span><h2>Chọn nguồn từ để vào trận</h2><p>Mỗi từ xuất hiện đúng 2 lần. Từ đến hạn sẽ được cập nhật lịch ôn sau trận.</p><label>Bộ từ<select value={deckId} onChange={(event) => setDeckId(event.target.value)}><option value="all">Tất cả bộ từ</option>{snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label><label>Nguồn từ<select value={source} onChange={(event) => setSource(event.target.value as GamePoolSource)}><option value="due">Từ đến hạn</option><option value="all">Toàn bộ active</option></select></label><div className="game-readiness"><span><b>{pool.length}</b><small>từ trong trận</small></span><span><b>{pool.filter((word) => word.isDue).length}</b><small>đến hạn</small></span><span><b>{inputMode === 'touch' ? 'Chạm quái' : 'Gõ chữ'}</b><small>chế độ tự động</small></span></div>{pool.length < 1 ? <div className="notice danger">Không có từ phù hợp với nguồn đã chọn.</div> : <button className="button primary large" onClick={() => setRunning(true)}><span>Bắt đầu siege</span> <IconArrowRight /></button>}</div></section>  </div>
+    <section className="game-hero panel"><div className="game-core-art"><span /><i /><b /></div><div><span className="eyebrow">Chuẩn bị phòng thủ</span><h2>Chọn nguồn từ để vào trận</h2><p>Mỗi từ xuất hiện đúng 2 lần. Từ đến hạn sẽ được cập nhật lịch ôn sau trận.</p><label>Bộ từ<select value={deckId} onChange={(event) => setDeckId(event.target.value)}><option value="all">Tất cả bộ từ</option>{snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label><label>Nguồn từ<select value={source} onChange={(event) => setSource(event.target.value as GamePoolSource)}><option value="due">Từ đến hạn (ôn)</option><option value="learned">Từ đã học</option><option value="all">Toàn bộ active</option></select></label><div className="game-readiness"><span><b>{pool.length}</b><small>từ trong trận</small></span><span><b>{pool.filter((word) => word.isDue).length}</b><small>đến hạn</small></span><span><b>{inputMode === 'touch' ? 'Chạm quái' : 'Gõ chữ'}</b><small>chế độ tự động</small></span></div>{pool.length < 1 ? <div className="notice danger">Không có từ phù hợp với nguồn đã chọn.</div> : <button className="button primary large" onClick={() => setRunning(true)}><span>Bắt đầu siege</span> <IconArrowRight /></button>}</div></section>  </div>
 
   if (hud?.phase === 'over') {
     const currentDrillIndex = drillIndex ?? 0

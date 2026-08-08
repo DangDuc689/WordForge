@@ -270,13 +270,13 @@ export function StudyPage() {
     })
     
     return snapshot.vocabulary
-      .filter(w => w.status === 'active' && (deckId === 'all' || w.deckId === deckId) && cardsByLevel.has(w.id))
+      .filter(w => (deckId === 'all' || w.deckId === deckId) && cardsByLevel.has(w.id))
       .map(w => ({ ...w, dueAt: cardsByLevel.get(w.id)! }))
       .sort((a, b) => a.english.localeCompare(b.english))
   }, [selectedMemoryLevel, snapshot.cards, snapshot.vocabulary, deckId])
 
   const queue = useMemo(() => {
-    const active = snapshot.vocabulary.filter((word) => word.status === 'active' && (deckId === 'all' || word.deckId === deckId))
+    const active = snapshot.vocabulary.filter((word) => (deckId === 'all' || word.deckId === deckId))
     if (mode === 'learn') return active.filter((word) => !snapshot.cards.some((card) => card.vocabularyId === word.id)).slice(0, snapshot.profile.newWordsPerSession)
     const dueIds = new Set(snapshot.cards.filter((card) => isDue(card)).sort((a, b) => +new Date(a.dueAt) - +new Date(b.dueAt)).map((card) => card.vocabularyId))
     return active.filter((word) => dueIds.has(word.id))
@@ -313,7 +313,7 @@ export function StudyPage() {
   const [index, setIndex] = useState(0)
   const [phase, setPhase] = useState<Phase>(mode === 'learn' ? 'preview' : 'entry')
   const [isFlipped, setIsFlipped] = useState(false)
-  const activeIds = useMemo(() => new Set(snapshot.vocabulary.filter((word) => word.status === 'active' && (deckId === 'all' || word.deckId === deckId)).map(w => w.id)), [deckId, snapshot.vocabulary])
+  const activeIds = useMemo(() => new Set(snapshot.vocabulary.filter((word) => (deckId === 'all' || word.deckId === deckId)).map(w => w.id)), [deckId, snapshot.vocabulary])
   
   const memoryStats = useMemo(() => {
     const stats = [

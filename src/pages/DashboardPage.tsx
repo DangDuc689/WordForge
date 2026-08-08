@@ -52,7 +52,7 @@ export function DashboardPage() {
           <div className="section-title"><span><b>Độ chính xác</b><small>Tất cả lượt ôn</small></span><strong>{stats.accuracy}%</strong></div>
           <div className="accuracy-ring" style={{ '--accuracy': `${stats.accuracy * 3.6}deg` } as React.CSSProperties}><span>{stats.accuracy}%<small>accuracy</small></span></div>
           <div className="mini-stats">
-            <span><b>{stats.learnedCount}/{snapshot.vocabulary.filter((word) => word.status === 'active').length}</b><small>từ đã học</small></span>
+            <span><b>{stats.learnedCount}/{snapshot.vocabulary.length}</b><small>từ đã học</small></span>
             <span><b>{stats.newCount}</b><small>từ chưa học</small></span>
             <span><b>{stats.todayLearnedCount}</b><small>mới hôm nay</small></span>
             <span><b>{stats.todayReviewedCount}</b><small>ôn hôm nay</small></span>

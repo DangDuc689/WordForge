@@ -14,7 +14,7 @@ export function ActivityCalendar() {
     currentStreak,
     rangeLabel,
   } = useMemo(
-    () => buildActivityCalendar(snapshot, timezone, new Date('2026-08-05T12:00:00Z')),
+    () => buildActivityCalendar(snapshot, timezone, new Date()),
     [snapshot, timezone],
   )
 

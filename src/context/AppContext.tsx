@@ -36,7 +36,7 @@ interface AppValue {
   error: string
   stats: ReturnType<typeof buildDashboardStats>
   saveWord: (input: Omit<VocabularyItem, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'source' | 'sourceKey'> & { id?: string }) => Promise<VocabularyItem>
-  archiveWord: (word: VocabularyItem) => Promise<void>
+  prioritizeLearnWord: (vocabularyId: string) => Promise<void>
   deleteWord: (id: string) => Promise<void>
   saveDeck: (name: string, description: string, id?: string) => Promise<Deck>
   deleteDeck: (id: string) => Promise<void>
@@ -246,10 +246,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }) : state)
         return word
       },
-      async archiveWord(word) {
-        const archived = { ...word, status: word.status === 'active' ? 'archived' as const : 'active' as const, updatedAt: nowIso() }
-        await repository.saveWord(archived)
-        setSnapshot((state) => state ? ({ ...state, vocabulary: state.vocabulary.map((item) => item.id === word.id ? archived : item) }) : state)
+      async prioritizeLearnWord(vocabularyId) {
+        if (savingSession || !learnSession || !snapshot) return
+        
+        const isTopPriority = learnSession.queueIds[0] === vocabularyId
+        const nextQueue = learnSession.queueIds.filter(id => id !== vocabularyId)
+        const nextDeferred = learnSession.deferredIds.filter(id => id !== vocabularyId)
+        
+        if (isTopPriority) {
+          nextDeferred.push(vocabularyId)
+        } else {
+          nextQueue.unshift(vocabularyId)
+        }
+
+        const updatedSession = sanitizeLearnSession({
+          ...learnSession,
+          queueIds: nextQueue,
+          deferredIds: nextDeferred,
+          status: nextQueue.length > 0 ? 'active' : 'completed',
+          updatedAt: new Date().toISOString()
+        }, snapshot)
+
+        await saveAndSetSession(updatedSession)
       },
       async deleteWord(id) {
         await repository.deleteWord(id)
@@ -384,7 +402,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       async recordGame(request) {
         const current = requireSnapshot()
 
-        const reviewResults = aggregateGameOutcomes(request.outcomes).flatMap((outcome) => {
+        const reviewResults = request.source === 'learned' ? [] : aggregateGameOutcomes(request.outcomes).flatMap((outcome) => {
           const card = current.cards.find((item) => item.vocabularyId === outcome.vocabularyId)
           if (!card || !isDue(card, new Date(request.createdAt))) return []
           return [scheduleReview({
@@ -543,7 +561,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (nextQueue.length === 0) {
           const availableIds = new Set(
             snapshot.vocabulary
-              .filter(w => w.status === 'active' && (learnSession.selectedDeckId === null || w.deckId === learnSession.selectedDeckId) && !snapshot.cards.some(c => c.vocabularyId === w.id))
+              .filter(w => (learnSession.selectedDeckId === null || w.deckId === learnSession.selectedDeckId) && !snapshot.cards.some(c => c.vocabularyId === w.id))
               .map(w => w.id)
           )
           const eligibleDeferred = finalDeferred.filter(id => availableIds.has(id))
@@ -607,7 +625,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (nextQueue.length === 0 && finalDeferred.length > 0) {
           const availableIds = new Set(
             tempSnapshot.vocabulary
-              .filter(w => w.status === 'active' && (learnSession.selectedDeckId === null || w.deckId === learnSession.selectedDeckId) && !tempSnapshot.cards.some(c => c.vocabularyId === w.id))
+              .filter(w => (learnSession.selectedDeckId === null || w.deckId === learnSession.selectedDeckId) && !tempSnapshot.cards.some(c => c.vocabularyId === w.id))
               .map(w => w.id)
           )
           const eligibleDeferred = finalDeferred.filter(id => availableIds.has(id))

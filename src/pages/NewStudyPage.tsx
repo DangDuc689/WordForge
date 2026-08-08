@@ -100,7 +100,7 @@ export function NewStudyPage() {
   const choices = useMemo(() => {
     if (!word) return []
     const d = snapshot.vocabulary
-      .filter(w => w.status === 'active' && w.id !== word.id)
+      .filter(w => w.id !== word.id)
       .flatMap(w => vocabularySenses(w).map((sense) => sense.vietnamese))
       .filter(Boolean)
       .sort(() => Math.random() - 0.5)
@@ -238,8 +238,8 @@ export function NewStudyPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [tab, isFlipped, choices, choice, checked, correct, word, answer])
   
-  const total = snapshot.vocabulary.filter(w => w.status === 'active' && (deck === 'all' || w.deckId === deck)).length
-  const learnedCount = snapshot.vocabulary.filter(w => w.status === 'active' && (deck === 'all' || w.deckId === deck) && snapshot.cards.some(c => c.vocabularyId === w.id)).length
+  const total = snapshot.vocabulary.filter(w => (deck === 'all' || w.deckId === deck)).length
+  const learnedCount = snapshot.vocabulary.filter(w => (deck === 'all' || w.deckId === deck) && snapshot.cards.some(c => c.vocabularyId === w.id)).length
   const reviewCount = snapshot.cards.filter(c => {
     if (!isDue(c)) return false
     const vocab = snapshot.vocabulary.find(w => w.id === c.vocabularyId)

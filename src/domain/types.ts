@@ -197,6 +197,8 @@ export interface AiPracticeSet {
   glossary: { vocabularyId: string; english: string; vietnamese: string }[]
 }
 
+export type GamePoolSource = 'due' | 'all' | 'learned'
+
 export interface GameWord {
   id: string
   english: string
@@ -218,6 +220,7 @@ export interface GameOutcome {
 export interface GameSaveRequest {
   runId: string
   deckId: string | null
+  source: GamePoolSource
   score: number
   wave: number
   accuracy: number

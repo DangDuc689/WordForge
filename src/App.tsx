@@ -9,6 +9,7 @@ import { PracticePage } from './pages/PracticePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StudyPage } from './pages/StudyPage'
 import { VocabularyPage } from './pages/VocabularyPage'
+import { AiChatPage } from './pages/AiChatPage'
 
 function AuthenticatedApp() {
   const { loading, session, isLocalMode } = useAuth()
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
           { path: "review", element: <StudyPage /> },
           { path: "game", element: <GamePage /> },
           { path: "practice", element: <PracticePage /> },
+          { path: "ai-chat", element: <AiChatPage /> },
           { path: "settings", element: <SettingsPage /> },
           { path: "*", element: <Navigate to="/" replace /> },
         ]

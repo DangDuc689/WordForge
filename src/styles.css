@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root {
   --bg: #f8fafc;
@@ -6188,6 +6187,7 @@ textarea:focus-visible,
   min-height: 0 !important;
   transition: transform 0.6s cubic-bezier(0.34, 1.25, 0.64, 1);
   transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .vocab-grid-wrap .flashcard-3d-canvas.is-flipped .flashcard-3d-inner {
@@ -7214,4 +7214,9 @@ textarea:focus-visible,
   gap: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
+}
+
+.table-action.active, .vocab-grid-wrap .action-strip-btn.active {
+  color: var(--primary) !important;
+  background: rgba(37, 99, 235, 0.1);
 }

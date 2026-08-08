@@ -48,7 +48,7 @@ export function mergeVocabularyItems(keeper: VocabularyItem, duplicate: Vocabula
   return withVocabularySenses({
     ...keeper,
     acceptedAnswers: [...new Set([...keeper.acceptedAnswers, ...duplicate.acceptedAnswers])],
-    status: keeper.status === 'active' || duplicate.status === 'active' ? 'active' : 'archived',
+    status: 'active',
     updatedAt: keeper.updatedAt > duplicate.updatedAt ? keeper.updatedAt : duplicate.updatedAt,
   }, [...vocabularySenses(keeper), ...vocabularySenses(duplicate)])
 }

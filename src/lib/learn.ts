@@ -17,11 +17,11 @@ export function sanitizeLearnSession(session: LearnSession, snapshot: AppSnapsho
   }
 
   // Helper sets for O(1) checks
-  const activeWordIds = new Set(snapshot.vocabulary.filter(w => w.status === 'active').map(w => w.id))
+  const activeWordIds = new Set(snapshot.vocabulary.map(w => w.id))
   const learnedWordIds = new Set(snapshot.cards.map(c => c.vocabularyId))
   const deckWordIds = new Set(
     snapshot.vocabulary
-      .filter(w => w.status === 'active' && (selectedDeckId === null || w.deckId === selectedDeckId))
+      .filter(w => (selectedDeckId === null || w.deckId === selectedDeckId))
       .map(w => w.id)
   )
 
@@ -76,7 +76,6 @@ export function generateNextBatch(session: LearnSession, snapshot: AppSnapshot, 
   // Available words: active, in deck, not learned (has no cards), and not already in the queue
   const queueSet = new Set(cleanSession.queueIds)
   const available = snapshot.vocabulary.filter(w => 
-    w.status === 'active' &&
     (cleanSession.selectedDeckId === null || w.deckId === cleanSession.selectedDeckId) &&
     !snapshot.cards.some(c => c.vocabularyId === w.id) &&
     !queueSet.has(w.id)
