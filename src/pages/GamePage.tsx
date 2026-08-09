@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { GameEngine, type GameSnapshot, type ShopKey } from '../game/GameEngine'
-import { buildGamePool, type GamePoolSource } from '../game/sessionPool'
-import type { GameSaveRequest } from '../domain/types'
+import { buildGamePool } from '../game/sessionPool'
+import type { GameSaveRequest, GamePoolSource } from '../domain/types'
 import { useSearchParams, useBlocker } from 'react-router-dom'
 
 const IconArrowRight = ({ size = 16 }: { size?: number }) => (
