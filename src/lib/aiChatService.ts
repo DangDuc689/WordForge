@@ -86,3 +86,28 @@ export async function generateReplySuggestions(
     return []
   }
 }
+
+/**
+ * Translates a given text to Vietnamese using the AI chat edge function.
+ */
+export async function translateMessageText(text: string): Promise<string | null> {
+  if (!supabase || !text.trim()) return null
+
+  try {
+    const { data, error } = await supabase.functions.invoke('ai-chat', {
+      body: {
+        action: 'translate',
+        text: text
+      }
+    })
+
+    if (error) throw error
+    if (data && typeof data.translation === 'string') {
+      return data.translation
+    }
+    return null
+  } catch (error) {
+    console.error('Failed to translate text', error)
+    return null
+  }
+}

@@ -14,7 +14,8 @@ export const MEMORY_LEVELS = [
   { level: 3 as ReviewRating, label: 'Cấp độ 3', shortLabel: 'LV3', delayMs: 2 * 24 * 60 * 60 * 1000, delayLabel: 'sau 2 ngày', color: '#eab308' },
   { level: 4 as ReviewRating, label: 'Cấp độ 4', shortLabel: 'LV4', delayMs: 3 * 24 * 60 * 60 * 1000, delayLabel: 'sau 3 ngày', color: '#84cc16' },
   { level: 5 as ReviewRating, label: 'Cấp độ 5', shortLabel: 'LV5', delayMs: 5 * 24 * 60 * 60 * 1000, delayLabel: 'sau 5 ngày', color: '#10b981' },
-  { level: 6 as ReviewRating, label: 'Nhớ sâu', shortLabel: 'Nhớ sâu', delayMs: 8 * 24 * 60 * 60 * 1000, delayLabel: 'sau 8 ngày', color: '#3b82f6' },
+  { level: 6 as ReviewRating, label: 'Cấp độ 6', shortLabel: 'LV6', delayMs: 8 * 24 * 60 * 60 * 1000, delayLabel: 'sau 8 ngày', color: '#3b82f6' },
+  { level: 7 as ReviewRating, label: 'Nhớ sâu', shortLabel: 'Nhớ sâu', delayMs: 13 * 24 * 60 * 60 * 1000, delayLabel: 'sau 13 ngày', color: '#8b5cf6' },
 ] as const
 
 export const memoryLevelInfo = (level: ReviewRating) => MEMORY_LEVELS[level - 1]
@@ -23,8 +24,8 @@ export function nextMemoryLevel(card: SrsCard, correct: boolean): ReviewRating {
   if (card.reps === 0) {
     return 1 as ReviewRating
   }
-  const current = card.memoryLevel >= 1 && card.memoryLevel <= 6 ? card.memoryLevel : 1
-  return Math.max(1, Math.min(6, current + (correct ? 1 : -1))) as ReviewRating
+  const current = card.memoryLevel >= 1 && card.memoryLevel <= 7 ? card.memoryLevel : 1
+  return Math.max(1, Math.min(7, current + (correct ? 1 : -1))) as ReviewRating
 }
 
 export function createSrsCard(userId: string, vocabularyId: string, now = new Date()): SrsCard {

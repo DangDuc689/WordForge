@@ -26,6 +26,8 @@ export interface ChatMessage {
   timestamp: number
   correction?: CorrectionFeedback // Populated if the assistant is providing grammar correction for the previous user message
   isTranslation?: boolean // Flag to indicate if this is a translated message (optional helper)
+  translation?: string // Lịch sử lưu bản dịch của tin nhắn
+  showTranslation?: boolean // Trạng thái hiển thị bản dịch
 }
 
 export interface AIChatSession {

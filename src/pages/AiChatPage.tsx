@@ -2,9 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { AICharacter, ChatMessage } from '../domain/aiChat'
 import { aiCharacters } from '../data/aiCharacters'
-import { sendChatMessage, generateReplySuggestions } from '../lib/aiChatService'
-
+import { sendChatMessage, generateReplySuggestions, translateMessageText } from '../lib/aiChatService'
+import { useApp } from '../context/AppContext'
+import { useTts } from '../lib/tts'
+import { SpeakerIcon } from '../components/SpeakerIcon'
 // Simple Icons
+const IconTranslate = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" /></svg>
 const IconBack = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
 const IconSend = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
 const IconLightbulb = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18h6M10 22h4M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
@@ -19,7 +22,30 @@ export function AiChatPage() {
   const [isSuggesting, setIsSuggesting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   
+  const { snapshot } = useApp()
+  const { speak, isLoading: isTtsLoading } = useTts(snapshot.profile.ttsVoice)
+  
+  const [translatingId, setTranslatingId] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const handleToggleTranslation = async (msgId: string, content: string, currentTranslation?: string) => {
+    if (currentTranslation) {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, showTranslation: !m.showTranslation } : m))
+      return
+    }
+    
+    setTranslatingId(msgId)
+    try {
+      const translatedText = await translateMessageText(content)
+      if (translatedText) {
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, translation: translatedText, showTranslation: true } : m))
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setTranslatingId(null)
+    }
+  }
 
   // Load chat session from local storage on character select
   useEffect(() => {
@@ -71,6 +97,9 @@ export function AiChatPage() {
 
     try {
       const { replyContent, correction } = await sendChatMessage(selectedCharacter, newMessages, userMsg.content)
+      
+      // Kích hoạt phát âm ngay lập tức (không await) để bù trừ delay tải audio
+      void speak(replyContent)
       
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -176,21 +205,59 @@ export function AiChatPage() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {messages.map(msg => (
-          <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-            <div 
-              style={{
-                maxWidth: '80%',
-                padding: '0.75rem 1rem',
-                borderRadius: '12px',
-                backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--panel-bg)',
-                color: msg.role === 'user' ? '#fff' : 'var(--text)',
-                border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
-                boxShadow: 'var(--shadow-sm)',
-                lineHeight: 1.5
-              }}
-            >
-              {msg.content}
+          <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', maxWidth: '85%', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+              <div 
+                style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--panel-bg)',
+                  color: msg.role === 'user' ? '#fff' : 'var(--text)',
+                  border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
+                  boxShadow: 'var(--shadow-sm)',
+                  lineHeight: 1.5
+                }}
+              >
+                {msg.content}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'row', gap: '0.25rem' }}>
+                <button 
+                  className="button ghost icon-only" 
+                  onClick={() => speak(msg.content)} 
+                  disabled={isTtsLoading(msg.content)}
+                  title="Nghe phát âm"
+                  style={{ opacity: 0.5, padding: '0.25rem', width: '32px', height: '32px' }}
+                >
+                  <SpeakerIcon />
+                </button>
+                <button 
+                  className="button ghost icon-only" 
+                  onClick={() => handleToggleTranslation(msg.id, msg.content, msg.translation)}
+                  disabled={translatingId === msg.id}
+                  title="Dịch sang tiếng Việt"
+                  style={{ opacity: msg.showTranslation ? 1 : 0.5, padding: '0.25rem', width: '32px', height: '32px', color: msg.showTranslation ? 'var(--cyan)' : 'inherit' }}
+                >
+                  {translatingId === msg.id ? <span style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>...</span> : <IconTranslate />}
+                </button>
+              </div>
             </div>
+            
+            {msg.showTranslation && msg.translation && (
+              <div style={{ 
+                marginTop: '0.5rem',
+                padding: '0.75rem 1rem',
+                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                borderLeft: msg.role === 'assistant' ? '3px solid var(--cyan)' : 'none',
+                borderRight: msg.role === 'user' ? '3px solid var(--cyan)' : 'none',
+                borderRadius: '8px',
+                maxWidth: '85%',
+                fontSize: '0.95rem',
+                color: 'var(--text)',
+                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start'
+              }}>
+                {msg.translation}
+              </div>
+            )}
             
             {msg.correction && (
               <div style={{ 

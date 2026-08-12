@@ -5,8 +5,8 @@ export type VocabularySource = 'manual' | 'starter' | 'oxford-3000'
 export type ReviewMode = 'learn' | 'review' | 'game-typing' | 'game-touch' | 'ai-quiz'
 export type TtsVoice = 'en-US-EmmaMultilingualNeural' | 'en-US-AriaNeural' | 'en-GB-SoniaNeural'
 export const DEFAULT_TTS_VOICE: TtsVoice = 'en-US-EmmaMultilingualNeural'
-/** The six fixed memory levels used by the review schedule. */
-export type ReviewRating = 1 | 2 | 3 | 4 | 5 | 6
+/** The seven fixed memory levels used by the review schedule. */
+export type ReviewRating = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 export interface Profile {
   id: string
@@ -46,6 +46,7 @@ export interface VocabularyItem {
   notes: string
   /** Canonical list of meanings/usages for this headword. Legacy records are upgraded from the scalar fields above. */
   senses?: VocabularySense[]
+  isPrioritized?: boolean
   status: VocabularyStatus
   source: VocabularySource
   sourceKey: string

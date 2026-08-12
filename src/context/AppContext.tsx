@@ -249,6 +249,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       async prioritizeLearnWord(vocabularyId) {
         if (savingSession || !learnSession || !snapshot) return
         
+        const word = snapshot.vocabulary.find(w => w.id === vocabularyId)
+        if (word) {
+          const updatedWord = { ...word, isPrioritized: !word.isPrioritized, updatedAt: nowIso() }
+          await repository.saveWord(updatedWord)
+          setSnapshot((state) => state ? ({
+            ...state,
+            vocabulary: state.vocabulary.map(w => w.id === vocabularyId ? updatedWord : w)
+          }) : state)
+        }
+        
         const isTopPriority = learnSession.queueIds[0] === vocabularyId
         const nextQueue = learnSession.queueIds.filter(id => id !== vocabularyId)
         const nextDeferred = learnSession.deferredIds.filter(id => id !== vocabularyId)
@@ -490,7 +500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           profile: { ...parsed.profile, id: userId, ttsVoice: parsed.profile.ttsVoice ?? DEFAULT_TTS_VOICE, updatedAt: nowIso() },
           decks: parsed.decks.map((item) => ({ ...item, userId, source: item.source ?? 'manual', sourceKey: item.sourceKey ?? '' })),
           vocabulary: parsed.vocabulary.map((item) => ({ ...item, userId, source: item.source ?? 'manual', sourceKey: item.sourceKey ?? '' })),
-          cards: (parsed.cards ?? []).map((item) => ({ ...item, userId, memoryLevel: item.memoryLevel >= 1 && item.memoryLevel <= 6 ? item.memoryLevel : (item.lastRating === 4 ? 6 : item.lastRating === 3 ? 4 : item.lastRating === 2 ? 2 : 1) })),
+          cards: (parsed.cards ?? []).map((item) => ({ ...item, userId, memoryLevel: item.memoryLevel >= 1 && item.memoryLevel <= 7 ? item.memoryLevel : (item.lastRating === 4 ? 6 : item.lastRating === 3 ? 4 : item.lastRating === 2 ? 2 : 1) })),
           reviews: (parsed.reviews ?? []).map((item) => ({ ...item, userId, rating: legacyBackup ? (item.rating === 4 ? 6 : item.rating === 3 ? 4 : item.rating === 2 ? 2 : 1) : item.rating })),
           gameRuns: (parsed.gameRuns ?? []).map((item) => ({ ...item, userId, deckId: item.deckId === 'all' ? null : item.deckId })),
           practiceSessions: (parsed.practiceSessions ?? []).map((item) => ({ ...item, userId })),
@@ -504,9 +514,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const existing = current.cards.find((item) => item.vocabularyId === vocabularyId)
         if (!existing) throw new Error('Không tìm thấy thẻ ghi nhớ cho từ này.')
 
-        let newLevel: 1 | 2 | 3 | 4 | 5 | 6 = existing.memoryLevel
+        let newLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 = existing.memoryLevel
         if (action === 'reset-to-one') newLevel = 1
-        else if (action === 'decrement') newLevel = Math.max(1, existing.memoryLevel - 1) as 1 | 2 | 3 | 4 | 5 | 6
+        else if (action === 'decrement') newLevel = Math.max(1, existing.memoryLevel - 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7
 
         if (newLevel === existing.memoryLevel) return
 

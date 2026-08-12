@@ -6,6 +6,7 @@ import { vocabularySenses } from '../domain/vocabulary'
 import { isAcceptedAnswer } from '../lib/normalize'
 import { isDue } from '../lib/srs'
 import { useTts } from '../lib/tts'
+import { gradeSentence } from '../lib/ai'
 
 type Tab = 'flashcard' | 'meaning' | 'word' | 'example'
 
@@ -58,6 +59,8 @@ export function NewStudyPage() {
   const [hint, setHint] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
   const [showVi, setShowVi] = useState(false)
+  const [aiFeedback, setAiFeedback] = useState('')
+  const [isAiGrading, setIsAiGrading] = useState(false)
   const started = useRef(Date.now())
   const exampleInputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -116,6 +119,8 @@ export function NewStudyPage() {
     setHint(false)
     setIsFlipped(false)
     setShowVi(false)
+    setAiFeedback('')
+    setIsAiGrading(false)
     if (tab === 'flashcard') {
       started.current = Date.now()
     }
@@ -179,9 +184,43 @@ export function NewStudyPage() {
   const checkExample = (e: FormEvent) => {
     e.preventDefault()
     if (word && answer.trim()) {
-      const isOk = answer.toLowerCase().includes(word.english.toLowerCase())
-      setCorrect(isOk)
+      const cleanAnswer = answer.trim()
+      const exampleText = word.exampleEn || `Is this ${word.english} in a different context?`
+      
+      const normalize = (s: string) => s.replace(/[.,!?]/g, '').trim().toLowerCase()
+      const isExactMatch = normalize(cleanAnswer) === normalize(exampleText)
+      
+      if (!isExactMatch) {
+        setCorrect(false)
+        setChecked(true)
+        setAiFeedback('Bạn chưa nhập đúng nguyên văn câu mẫu. (Hoặc dùng "Đánh giá AI" nếu bạn tự đặt câu mới)')
+        return
+      }
+
+      setCorrect(true)
       setChecked(true)
+      setAiFeedback('')
+    }
+  }
+
+  const handleAiGrade = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!word || !answer.trim() || busy || savingSession || isAiGrading) return
+    
+    setIsAiGrading(true)
+    setAiFeedback('')
+    
+    try {
+      const res = await gradeSentence(word.english, word.vietnamese, answer.trim())
+      setCorrect(res.isCorrect)
+      setAiFeedback(res.feedback + (res.correctedSentence && res.correctedSentence !== answer.trim() ? `\n\nGợi ý sửa: ${res.correctedSentence}` : ''))
+      setChecked(true)
+    } catch (err) {
+      setCorrect(false)
+      setChecked(true)
+      setAiFeedback(`Lỗi: ${err instanceof Error ? err.message : 'Không thể kết nối AI. Vui lòng thử Kiểm tra câu thông thường.'}`)
+    } finally {
+      setIsAiGrading(false)
     }
   }
 
@@ -228,7 +267,7 @@ export function NewStudyPage() {
           } else if (checked) {
             e.preventDefault()
             if (correct) void nextWord(true)
-            else { setChecked(false); setAnswer(''); }
+            else { setChecked(false); setAnswer(''); setAiFeedback(''); }
           }
         }
       }
@@ -518,6 +557,7 @@ export function NewStudyPage() {
           <form onSubmit={checkExample}>
             <textarea 
               ref={exampleInputRef}
+              style={checked && !correct ? { borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.05)' } : undefined}
               autoFocus
               value={answer} 
               onChange={e => setAnswer(e.target.value)} 
@@ -541,10 +581,10 @@ export function NewStudyPage() {
             />
             
             <div className="example-actions">
-              <button type="button" className="ai-grade" disabled={!answer.trim() || checked || busy || savingSession} onClick={() => checkExample({ preventDefault: () => {} } as FormEvent)}>
-                Đánh giá AI
+              <button type="button" className="ai-grade" disabled={!answer.trim() || checked || busy || savingSession || isAiGrading} onClick={handleAiGrade}>
+                {isAiGrading ? 'Đang chấm...' : 'Đánh giá AI'}
               </button>
-              <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession}>
+              <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession || isAiGrading}>
                 Kiểm tra câu
               </button>
             </div>
@@ -552,8 +592,11 @@ export function NewStudyPage() {
 
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
-              <span>{correct ? 'Hoàn thành từ vựng này!' : 'Hãy đảm bảo bạn đã dùng đúng từ vựng trong câu.'}</span>
-              <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : (setChecked(false), setAnswer(''))}>
+              <div className="feedback-content" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+                <span>{correct ? 'Hoàn thành từ vựng này!' : 'Chưa đạt yêu cầu.'}</span>
+                {aiFeedback && <p className="ai-feedback-text" style={{ fontSize: '0.9rem', opacity: 0.9, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{aiFeedback}</p>}
+              </div>
+              <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : (setChecked(false), setAnswer(''), setAiFeedback(''))}>
                 {correct ? 'Hoàn thành →' : 'Thử lại'}
               </button>
             </div>

@@ -42,7 +42,7 @@ export function DashboardPage() {
           <div className="section-title"><span><b>Nhiệm vụ hôm nay</b><small>Tự chọn đường học phù hợp</small></span></div>
           <div className="mission-list">
             <Link to="/learn" className="mission"><i>✦</i><span><b>Học từ mới</b><small>Học liên tục từ các bộ từ của bạn</small></span><strong>{stats.newCount} →</strong></Link>
-            <Link to="/review" className="mission"><i>↻</i><span><b>Ôn từ đến hạn</b><small>Lộ trình 6 cấp · lịch ôn cố định</small></span><strong>{stats.dueCount} →</strong></Link>
+            <Link to="/review" className="mission"><i>↻</i><span><b>Ôn từ đến hạn</b><small>Lộ trình 7 cấp · lịch ôn cố định</small></span><strong>{stats.dueCount} →</strong></Link>
             <Link to="/game" className="mission"><i>⌁</i><span><b>Vào Vocab Siege</b><small>Tower-defense dùng chính kho từ của bạn</small></span><strong>Chơi →</strong></Link>
             <Link to="/practice" className="mission"><i>◇</i><span><b>Luyện với AI</b><small>Bài đọc và quiz từ những từ đã học</small></span><strong>Tạo →</strong></Link>
           </div>

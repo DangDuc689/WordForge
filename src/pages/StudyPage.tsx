@@ -5,21 +5,13 @@ import { useApp } from '../context/AppContext'
 import type { TtsVoice, VocabularyItem } from '../domain/types'
 import { senseMeanings, vocabularySenses } from '../domain/vocabulary'
 import { isAcceptedAnswer } from '../lib/normalize'
-import { isDue, memoryLevelInfo, nextMemoryLevel } from '../lib/srs'
+import { isDue, MEMORY_LEVELS, memoryLevelInfo, nextMemoryLevel } from '../lib/srs'
 import { NewStudyPage } from './NewStudyPage'
 import { useTts } from '../lib/tts'
 
 type Phase = 'entry' | 'preview' | 'question' | 'result'
 
-function SpeakerIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={`speaker-svg ${className}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-    </svg>
-  )
-}
+import { SpeakerIcon } from '../components/SpeakerIcon'
 
 function CheckIcon({ className = '' }: { className?: string }) {
   return (
@@ -265,7 +257,7 @@ export function StudyPage() {
     if (selectedMemoryLevel === null) return []
     const cardsByLevel = new Map<string, string>()
     snapshot.cards.forEach(card => {
-      const level = card.memoryLevel >= 1 && card.memoryLevel <= 6 ? card.memoryLevel : 1
+      const level = card.memoryLevel >= 1 && card.memoryLevel <= 7 ? card.memoryLevel : 1
       if (level === selectedMemoryLevel) cardsByLevel.set(card.vocabularyId, card.dueAt)
     })
     
@@ -316,16 +308,12 @@ export function StudyPage() {
   const activeIds = useMemo(() => new Set(snapshot.vocabulary.filter((word) => (deckId === 'all' || word.deckId === deckId)).map(w => w.id)), [deckId, snapshot.vocabulary])
   
   const memoryStats = useMemo(() => {
-    const stats = [
-      { label: 'LV1', count: 0, color: '#ef4444' }, { label: 'LV2', count: 0, color: '#f97316' },
-      { label: 'LV3', count: 0, color: '#eab308' }, { label: 'LV4', count: 0, color: '#84cc16' },
-      { label: 'LV5', count: 0, color: '#10b981' }, { label: 'Nhớ sâu', count: 0, color: '#3b82f6' },
-    ]
+    const stats = MEMORY_LEVELS.map(m => ({ label: m.shortLabel, count: 0, color: m.color }))
     let learnedCount = 0
     snapshot.cards.forEach(card => {
       if (!activeIds.has(card.vocabularyId)) return
       learnedCount++
-      const level = card.memoryLevel >= 1 && card.memoryLevel <= 6 ? card.memoryLevel : 1
+      const level = card.memoryLevel >= 1 && card.memoryLevel <= 7 ? card.memoryLevel : 1
       stats[level - 1].count++
     })
     const maxCount = Math.max(...stats.map(s => s.count), 1)
@@ -351,7 +339,7 @@ export function StudyPage() {
   const getMemoryLevel = (vocabularyId: string) => {
     const card = snapshot.cards.find(c => c.vocabularyId === vocabularyId)
     if (!card) return { label: 'MỚI', color: 'var(--faint)' }
-    const info = memoryLevelInfo((card.memoryLevel || 1) as 1 | 2 | 3 | 4 | 5 | 6)
+    const info = memoryLevelInfo((card.memoryLevel || 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7)
     return { label: info.shortLabel, color: info.color }
   }
 

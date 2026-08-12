@@ -21,11 +21,11 @@ import { senseCefr, senseMeanings, senseParts, vocabularySenses } from '../domai
 import { useTts } from '../lib/tts'
 
 export function VocabularyPage() {
-  const { snapshot, prioritizeLearnWord, deleteWord, saveDeck, deleteDeck, learnSession } = useApp()
+  const { snapshot, prioritizeLearnWord, deleteWord, saveDeck, deleteDeck } = useApp()
   const { speak: speakTts, isLoading: isTtsLoading } = useTts(snapshot.profile.ttsVoice)
   const [query, setQuery] = useState('')
   const [deckFilter, setDeckFilter] = useState(snapshot.decks[0]?.id ?? 'all')
-  const [partFilter, setPartFilter] = useState<PartOfSpeech | 'all'>('all')
+  const [partFilter, setPartFilter] = useState<PartOfSpeech | 'all' | 'priority'>('all')
 
   const [progressFilter, setProgressFilter] = useState<'all' | 'new' | 'learned' | 'review'>('all')
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
@@ -43,7 +43,7 @@ export function VocabularyPage() {
   const filtered = useMemo(() => snapshot.vocabulary.filter((word) => {
     const needle = query.toLocaleLowerCase('vi')
     return (deckFilter === 'all' || word.deckId === deckFilter)
-      && (partFilter === 'all' || senseParts(word).includes(partFilter))
+      && (partFilter === 'all' ? true : partFilter === 'priority' ? word.isPrioritized === true : senseParts(word).includes(partFilter))
       && (progressFilter === 'all' || (progressFilter === 'new' ? !cardsByWord.has(word.id) : progressFilter === 'learned' ? cardsByWord.has(word.id) : Boolean(cardsByWord.get(word.id) && cardsByWord.get(word.id)!.reps > 0)))
       && (!needle || word.english.toLowerCase().includes(needle) || senseMeanings(word).some((meaning) => meaning.toLocaleLowerCase('vi').includes(needle)))
   }), [cardsByWord, deckFilter, partFilter, progressFilter, query, snapshot.vocabulary])
@@ -161,8 +161,9 @@ export function VocabularyPage() {
           {snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
         </select>
         
-        <select value={partFilter} onChange={(event) => setPartFilter(event.target.value as PartOfSpeech | 'all')}>
+        <select value={partFilter} onChange={(event) => setPartFilter(event.target.value as PartOfSpeech | 'all' | 'priority')}>
           <option value="all">Mọi loại từ</option>
+          <option value="priority">Từ ưu tiên</option>
           <option value="noun">Danh từ</option>
           <option value="verb">Động từ</option>
           <option value="adjective">Tính từ</option>
@@ -176,7 +177,6 @@ export function VocabularyPage() {
           <option value="numeral">Số từ</option>
           <option value="modal">Động từ khuyết thiếu</option>
           <option value="auxiliary">Trợ động từ</option>
-          <option value="other">Khác</option>
         </select>
         
 
@@ -224,7 +224,7 @@ export function VocabularyPage() {
             <tbody>
               {visibleWords.map((word) => {
                 const card = cardsByWord.get(word.id)
-                const state = !card ? 'Chưa học' : card.memoryLevel === 6 ? 'Nhớ sâu' : ('Cấp ' + card.memoryLevel)
+                const state = !card ? 'Chưa học' : card.memoryLevel === 7 ? 'Nhớ sâu' : ('Cấp ' + card.memoryLevel)
                 return (
                   <tr key={word.id}>
                     <td>
@@ -261,11 +261,11 @@ export function VocabularyPage() {
                       <button className="table-action" onClick={() => setEditing(word)}>Sửa</button>
                       {!card && (
                         <button 
-                          className={`table-action ${learnSession?.queueIds[0] === word.id ? 'active' : ''}`}
+                          className={`table-action ${word.isPrioritized ? 'active' : ''}`}
                           onClick={() => void prioritizeLearnWord(word.id)}
-                          title={learnSession?.queueIds[0] === word.id ? "Hủy ưu tiên học từ này" : "Ưu tiên học từ này"}
+                          title={word.isPrioritized ? "Hủy ưu tiên học từ này" : "Ưu tiên học từ này"}
                         >
-                          {learnSession?.queueIds[0] === word.id ? 'Đã ưu tiên' : 'Ưu tiên'}
+                          {word.isPrioritized ? 'Đã ưu tiên' : 'Ưu tiên'}
                         </button>
                       )}
                       <button
@@ -288,7 +288,7 @@ export function VocabularyPage() {
           {visibleWords.map((word) => {
             const card = cardsByWord.get(word.id)
             const level = !card ? 0 : card.memoryLevel || 1
-            const stateLabel = !card ? 'Chưa học' : card.memoryLevel === 6 ? 'Nhớ sâu' : (`Cấp ${card.memoryLevel}`)
+            const stateLabel = !card ? 'Chưa học' : card.memoryLevel === 7 ? 'Nhớ sâu' : (`Cấp ${card.memoryLevel}`)
             const isFlipped = flippedCardIds.has(word.id)
 
             return (
@@ -382,11 +382,11 @@ export function VocabularyPage() {
                   </button>
                   {!card && (
                     <button 
-                      className={`action-strip-btn ${learnSession?.queueIds[0] === word.id ? 'active' : ''}`}
+                      className={`action-strip-btn ${word.isPrioritized ? 'active' : ''}`}
                       onClick={() => void prioritizeLearnWord(word.id)} 
-                      title={learnSession?.queueIds[0] === word.id ? "Hủy ưu tiên học từ này" : "Ưu tiên học từ này"}
+                      title={word.isPrioritized ? "Hủy ưu tiên học từ này" : "Ưu tiên học từ này"}
                     >
-                      {learnSession?.queueIds[0] === word.id ? 'Đã ưu tiên' : 'Ưu tiên'}
+                      {word.isPrioritized ? 'Đã ưu tiên' : 'Ưu tiên'}
                     </button>
                   )}
                   <button

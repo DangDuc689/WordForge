@@ -241,7 +241,7 @@ export function SettingsPage() {
 
         <section className="panel settings-section no-lift">
           <SectionHeader icon={<IconArchive />} title="Backup dữ liệu" subtitle="Supabase Free không có automatic backup" />
-          <p>Xuất toàn bộ bộ từ, lộ trình 6 cấp nhớ, game run và AI practice thành một file JSON.</p>
+          <p>Xuất toàn bộ bộ từ, lộ trình 7 cấp nhớ, game run và AI practice thành một file JSON.</p>
           <div className="button-row">
             <button className="button secondary" onClick={exportBackup}><IconDownload />Xuất backup</button>
             <button className="button ghost" onClick={() => fileRef.current?.click()}><IconUpload />Nhập backup</button>

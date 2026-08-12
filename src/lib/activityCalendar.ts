@@ -189,7 +189,7 @@ export function buildActivityCalendar(
       const dateFormatted = outside ? '' : formatVietnameseDate(dateStr)
       const tooltip = outside
         ? ''
-        : `${dateFormatted}: Đã học ${learnedCount} lượt · Đã ôn ${reviewedCount} lượt`
+        : `${dateFormatted}: Đã học ${learnedCount} từ · Đã ôn ${reviewedCount} từ`
 
       return {
         dateStr,

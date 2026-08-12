@@ -28,11 +28,19 @@ const suggestSchema = {
   required: ['suggestions']
 }
 
+const translateSchema = {
+  type: 'OBJECT',
+  properties: {
+    translation: { type: 'STRING', description: 'Bản dịch tiếng Việt tự nhiên' }
+  },
+  required: ['translation']
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
     // Optionally require auth if needed, or allow anon for practice
-    // const { client, user } = await requireUser(request)
+    await requireUser(request)
     
     const payload = await request.json()
     const action = payload.action || 'chat'
@@ -78,6 +86,15 @@ Chat Transcript:
 ${transcript}`
 
       const result = await callGemini(prompt, suggestSchema)
+      return json(result)
+    }
+    else if (action === 'translate') {
+      const { text } = payload
+      if (!text) {
+        return json({ error: 'Thiếu text.' }, 400)
+      }
+      const prompt = `Dịch đoạn văn bản tiếng Anh sau sang tiếng Việt một cách tự nhiên, phù hợp với ngữ cảnh hội thoại:\n\n${text}`
+      const result = await callGemini(prompt, translateSchema)
       return json(result)
     }
 

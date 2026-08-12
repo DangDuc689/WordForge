@@ -71,3 +71,14 @@ export const enrichVocabulary = (term: string, deckId: string): Promise<AiVocabu
 
 export const generatePractice = (deckId: string | null, format: 'reading' | 'dialogue' | 'dictation'): Promise<AiPracticeSet> =>
   invoke('ai-generate-practice', { deckId, format }, practiceSetSchema)
+
+export const aiSentenceGradingSchema = z.object({
+  isCorrect: z.boolean(),
+  feedback: z.string(),
+  correctedSentence: z.string()
+})
+
+export type AiSentenceGrading = z.infer<typeof aiSentenceGradingSchema>
+
+export const gradeSentence = (word: string, meaning: string, sentence: string): Promise<AiSentenceGrading> =>
+  invoke('ai-grade-sentence', { word, meaning, sentence }, aiSentenceGradingSchema)

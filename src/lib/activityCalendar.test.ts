@@ -143,8 +143,8 @@ describe('buildActivityCalendar', () => {
       level: 1,
       status: 'active',
     })
-    expect(day?.tooltip).toContain('Đã học 1 lượt')
-    expect(day?.tooltip).toContain('Đã ôn 2 lượt')
+    expect(day?.tooltip).toContain('Đã học 1 từ')
+    expect(day?.tooltip).toContain('Đã ôn 2 từ')
     expect(day?.tooltip).not.toContain('XP')
   })
 
