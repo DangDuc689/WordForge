@@ -50,10 +50,27 @@ export function isAcceptedVietnameseAnswer(
 ): boolean {
   if (!submitted || !canonical) return false
   const s = normalizeAnswer(submitted)
-  const c = normalizeAnswer(canonical)
-  // Exact match (có dấu)
-  if (s === c) return true
-  // Match không dấu
-  return stripVietnameseDiacritics(s) === stripVietnameseDiacritics(c)
+  const sStripped = stripVietnameseDiacritics(s)
+
+  // Tách chuỗi canonical theo dấu , hoặc ;
+  const parts = canonical.split(/[,;]/).map((p) => p.trim()).filter(Boolean)
+
+  for (const part of parts) {
+    // Tạo biến thể gốc (có ngoặc) và biến thể bỏ ngoặc
+    const variants = [
+      part,
+      part.replace(/\s*\([^)]*\)/g, '').trim(),
+    ].filter(Boolean)
+
+    for (const v of variants) {
+      const c = normalizeAnswer(v)
+      // Exact match (có dấu)
+      if (s === c) return true
+      // Match không dấu
+      if (sStripped === stripVietnameseDiacritics(c)) return true
+    }
+  }
+
+  return false
 }
 

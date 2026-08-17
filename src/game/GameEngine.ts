@@ -516,7 +516,10 @@ export class GameEngine {
     let label: string
     if (monster.killPhase === 2) {
       label = monster.word.english
-      if (monster.hintUntil > this.state.time && this.inputMode === 'typing') label += `  →  ${monster.word.vietnamese[0]}…`
+      if (monster.hintUntil > this.state.time && this.inputMode === 'typing') {
+        const firstMeaning = monster.word.vietnamese.split(/[,;]/)[0].trim().replace(/\s*\([^)]*\)/g, '').trim()
+        label += `  →  ${firstMeaning[0]}…`
+      }
     } else {
       label = monster.word.vietnamese
       if (monster.hintUntil > this.state.time && this.inputMode === 'typing') label += `  →  ${monster.word.english[0]}…`
