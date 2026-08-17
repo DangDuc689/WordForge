@@ -20,13 +20,20 @@ export function buildGamePool(
     .filter((word) => (deckId === 'all' || word.deckId === deckId))
     .filter((word) => {
       if (options.source === 'due') return isDue(cardMap.get(word.id), now)
-      if (options.source === 'learned') return cardMap.has(word.id)
+      if (options.source === 'learned') {
+        const card = cardMap.get(word.id)
+        return card != null && card.memoryLevel >= 1
+      }
       return true
     })
     .filter((word) => !selected || selected.has(word.id))
     .sort((a, b) => {
       const cardA = cardMap.get(a.id)
       const cardB = cardMap.get(b.id)
+      // Source "learned": ưu tiên từ có memoryLevel thấp nhất (từ yếu lên trước)
+      if (options.source === 'learned') {
+        return (cardA!.memoryLevel - cardB!.memoryLevel) || a.tier - b.tier
+      }
       const priority = (card: SrsCard | undefined) => !card ? 2 : isDue(card, now) ? 0 : (card.lapses > 0 || card.memoryLevel <= 2) ? 1 : 3
       return priority(cardA) - priority(cardB) || a.tier - b.tier
     })

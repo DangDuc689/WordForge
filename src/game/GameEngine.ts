@@ -1,5 +1,5 @@
 import type { GameOutcome, GameWord } from '../domain/types'
-import { isAcceptedAnswer, normalizeVietnamese } from '../lib/normalize'
+import { isAcceptedAnswer, isAcceptedVietnameseAnswer, normalizeVietnamese } from '../lib/normalize'
 
 export interface GameSnapshot {
   phase: 'playing' | 'paused' | 'shop' | 'over'
@@ -36,6 +36,8 @@ interface Monster {
   dying: number
   killed: boolean
   seed: number
+  killPhase: 1 | 2
+  freezeUntil: number
 }
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }
@@ -153,18 +155,50 @@ export class GameEngine {
 
   submitAnswer(value: string): boolean {
     if (this.state.phase !== 'playing' || !value.trim()) return false
-    const matches = this.monsters.filter((monster) => !monster.dying && isAcceptedAnswer(value, monster.word.english, monster.word.acceptedAnswers))
-    if (!matches.length) { this.registerWrong(); return false }
-    matches.sort((a, b) => this.distance(a) - this.distance(b))
-    this.kill(matches[0], false)
+
+    const phase1Matches = this.monsters.filter((m) =>
+      !m.dying && !m.killed && m.killPhase === 1 &&
+      isAcceptedAnswer(value, m.word.english, m.word.acceptedAnswers)
+    )
+
+    const phase2Matches = this.monsters.filter((m) =>
+      !m.dying && !m.killed && m.killPhase === 2 &&
+      isAcceptedVietnameseAnswer(value, m.word.vietnamese)
+    )
+
+    const allMatches = [...phase1Matches, ...phase2Matches]
+    if (!allMatches.length) { this.registerWrong(); return false }
+
+    allMatches.sort((a, b) => this.distance(a) - this.distance(b))
+    const target = allMatches[0]
+
+    if (target.killPhase === 1) {
+      this.transitionToPhase2(target)
+    } else {
+      this.kill(target, false)
+    }
     return true
+  }
+
+  private transitionToPhase2(monster: Monster) {
+    if (this.inputMode === 'touch') {
+      this.kill(monster, false)
+      return
+    }
+
+    monster.killPhase = 2
+    monster.freezeUntil = this.state.time + 6
+
+    this.beep(440, .06, 'sine')
+    this.burst(monster.x, monster.y, '#38bdf8', 6)
+    this.emit(true)
   }
 
   tap(clientX: number, clientY: number): boolean {
     if (this.state.phase !== 'playing' || this.inputMode !== 'touch') return false
     const rect = this.canvas.getBoundingClientRect()
     const x = clientX - rect.left, y = clientY - rect.top
-    const tapped = [...this.monsters].reverse().find((monster) => !monster.dying && Math.hypot(x - monster.x, y - monster.y) <= monster.radius + 18)
+    const tapped = [...this.monsters].reverse().find((monster) => !monster.dying && monster.killPhase === 1 && Math.hypot(x - monster.x, y - monster.y) <= monster.radius + 18)
     const target = this.getTarget()
     if (!tapped || !target) return false
     if (tapped.word.id === target.word.id) { this.kill(target, false); return true }
@@ -251,7 +285,8 @@ export class GameEngine {
     this.updateWave(dt)
     for (const monster of this.monsters) {
       if (monster.killed) { monster.dying -= dt; continue }
-      if (this.state.slow.active <= 0) {
+      const isFrozen = this.state.slow.active > 0 || (monster.killPhase === 2 && monster.freezeUntil > this.state.time)
+      if (!isFrozen) {
         const dx = this.centerX - monster.x, dy = this.centerY - monster.y, distance = Math.hypot(dx, dy) || 1
         const effectiveSpeed = monster.speed * this.speedMultiplier
         const vx = dx / distance * effectiveSpeed
@@ -320,7 +355,7 @@ export class GameEngine {
     else if (edge === 1) { x = this.width + margin; y = Math.random() * this.height }
     else if (edge === 2) { x = Math.random() * this.width; y = this.height + margin }
     else { x = -margin; y = Math.random() * this.height }
-    this.monsters.push({ id: crypto.randomUUID(), word, x, y, radius: word.category === 'phrase' ? 30 : 24, speed: MONSTER_SPEED, spawnAt: this.state.time, hintUntil: 0, dying: 0, killed: false, seed: Math.random() * Math.PI * 2 })
+    this.monsters.push({ id: crypto.randomUUID(), word, x, y, radius: word.category === 'phrase' ? 30 : 24, speed: MONSTER_SPEED, spawnAt: this.state.time, hintUntil: 0, dying: 0, killed: false, seed: Math.random() * Math.PI * 2, killPhase: 1, freezeUntil: 0 })
   }
 
   private kill(monster: Monster, usedHint: boolean) {
@@ -466,14 +501,34 @@ export class GameEngine {
     ctx.save(); ctx.globalAlpha = alpha; ctx.translate(monster.x, monster.y)
     const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, monster.radius * 2); glow.addColorStop(0, `${color}33`); glow.addColorStop(1, `${color}00`)
     ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, monster.radius * 2, 0, Math.PI * 2); ctx.fill()
+    if (monster.killPhase === 2 && monster.freezeUntil > this.state.time) {
+      const iceGlow = ctx.createRadialGradient(0, 0, monster.radius * 0.5, 0, 0, monster.radius * 2.5)
+      iceGlow.addColorStop(0, 'rgba(56, 189, 248, 0.3)')
+      iceGlow.addColorStop(0.6, 'rgba(56, 189, 248, 0.1)')
+      iceGlow.addColorStop(1, 'rgba(56, 189, 248, 0)')
+      ctx.fillStyle = iceGlow
+      ctx.beginPath(); ctx.arc(0, 0, monster.radius * 2.5, 0, Math.PI * 2); ctx.fill()
+    }
     ctx.fillStyle = isDark ? '#1e293b' : '#ffffff'; ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.beginPath()
     const spikes = monster.word.tier + 5
     for (let index = 0; index <= spikes * 2; index++) { const angle = index / (spikes * 2) * Math.PI * 2, point = index % 2 === 0 ? monster.radius : monster.radius * .74, wobble = 1 + Math.sin(this.state.time * 3 + monster.seed + index) * .05; const x = Math.cos(angle) * point * wobble, y = Math.sin(angle) * point * wobble; index ? ctx.lineTo(x, y) : ctx.moveTo(x, y) }
     ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(-7, -2, 3, 0, Math.PI * 2); ctx.arc(7, -2, 3, 0, Math.PI * 2); ctx.fill(); ctx.restore()
-    let label = monster.word.vietnamese
-    if (monster.hintUntil > this.state.time && this.inputMode === 'typing') label += `  →  ${monster.word.english[0]}…`
+    let label: string
+    if (monster.killPhase === 2) {
+      label = monster.word.english
+      if (monster.hintUntil > this.state.time && this.inputMode === 'typing') label += `  →  ${monster.word.vietnamese[0]}…`
+    } else {
+      label = monster.word.vietnamese
+      if (monster.hintUntil > this.state.time && this.inputMode === 'typing') label += `  →  ${monster.word.english[0]}…`
+    }
     ctx.font = `600 ${this.width < 520 ? 12 : 14}px "Be Vietnam Pro", sans-serif`; const width = ctx.measureText(label).width + 22
-    const labelY = monster.y - monster.radius - 26; ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255,255,255,0.95)'; this.roundRect(monster.x - width / 2, labelY - 15, width, 30, 8); ctx.fill()
+    const labelY = monster.y - monster.radius - 26; 
+    if (monster.killPhase === 2) {
+      ctx.fillStyle = isDark ? 'rgba(7, 89, 133, 0.92)' : 'rgba(224, 242, 254, 0.95)'
+    } else {
+      ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255,255,255,0.95)'
+    }
+    this.roundRect(monster.x - width / 2, labelY - 15, width, 30, 8); ctx.fill()
     ctx.strokeStyle = `${color}aa`; ctx.stroke(); ctx.fillStyle = isDark ? '#f8fafc' : '#0f172a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, monster.x, labelY)
   }
 
