@@ -1,4 +1,4 @@
-# Vocab Siege
+# WordForge
 
 Ứng dụng học từ vựng cá nhân theo phong cách typing tower-defense. Bản prototype gốc vẫn nằm ở [`vocab-siege.html`](./vocab-siege.html); app mới nằm trong `src/`.
 

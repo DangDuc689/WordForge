@@ -17,7 +17,7 @@ export function DashboardPage() {
       <PageHeader
         eyebrow="Learning command center"
         title={<>Chào mừng trở lại <span className="accent">chiến tuyến</span></>}
-        description="Bạn chọn cách học hôm nay. Vocab Siege sẽ giữ lịch ôn và ưu tiên những từ cần thiết nhất."
+        description="Bạn chọn cách học hôm nay. WordForge sẽ giữ lịch ôn và ưu tiên những từ cần thiết nhất."
         actions={
           <>
             <div className="streak-pill">

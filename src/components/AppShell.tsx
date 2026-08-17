@@ -21,9 +21,9 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <NavLink to="/" className="brand" aria-label="Vocab Siege">
+        <NavLink to="/" className="brand" aria-label="WordForge">
           <span className="brand-core" />
-          <span><b>Vocab</b><em>Siege</em></span>
+          <span><b>Word</b><em>Forge</em></span>
         </NavLink>
         <nav className="primary-nav" aria-label="Điều hướng chính">
           {links.map(([to, label, icon]) => (

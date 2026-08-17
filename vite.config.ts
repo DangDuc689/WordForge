@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Vocab Siege',
-        short_name: 'Vocab Siege',
+        name: 'WordForge',
+        short_name: 'WordForge',
         description: 'Học từ vựng bằng lặp lại ngắt quãng và game tower-defense.',
         theme_color: '#171426',
         background_color: '#171426',

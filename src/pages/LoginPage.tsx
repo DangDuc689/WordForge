@@ -26,7 +26,7 @@ export function LoginPage() {
       <div className="login-orbit"><span /><i /><b /></div>
       <form className="login-card" onSubmit={submit}>
         <span className="eyebrow">Private learning vault</span>
-        <h1>Vocab <em>Siege</em></h1>
+        <h1>Word <em>Forge</em></h1>
         <p>Đăng nhập bằng email đã được mời để đồng bộ kho từ và lịch ôn trên mọi thiết bị.</p>
         <label>Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
         <button className="button primary" disabled={busy}>{busy ? 'Đang gửi…' : 'Gửi magic link'}</button>
