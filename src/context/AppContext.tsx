@@ -79,10 +79,10 @@ function createInitialSnapshot(userId: string): AppSnapshot {
     decks: [{
       id: deckId,
       userId,
-      name: 'Vocab Siege Starter',
+      name: 'WordForge Starter',
       description: '72 từ mẫu được chuyển từ prototype ban đầu.',
       source: 'starter',
-      sourceKey: 'vocab-siege-starter-v1',
+      sourceKey: 'wordforge-starter-v1',
       createdAt: now,
       updatedAt: now,
     }],
@@ -99,7 +99,7 @@ function createInitialSnapshot(userId: string): AppSnapshot {
       ipa: '',
       exampleEn: '',
       exampleVi: '',
-      notes: index < 72 ? 'Từ mẫu của Vocab Siege.' : '',
+      notes: index < 72 ? 'Từ mẫu của WordForge.' : '',
       senses: [{
         sourceKey: `starter:${index}:${item.english}`,
         vietnamese: item.vietnamese,
@@ -109,7 +109,7 @@ function createInitialSnapshot(userId: string): AppSnapshot {
         ipa: '',
         exampleEn: '',
         exampleVi: '',
-        notes: index < 72 ? 'Từ mẫu của Vocab Siege.' : '',
+        notes: index < 72 ? 'Từ mẫu của WordForge.' : '',
       }],
       status: 'active' as const,
       source: 'starter' as const,
@@ -415,10 +415,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const reviewResults = request.source === 'learned' ? [] : aggregateGameOutcomes(request.outcomes).flatMap((outcome) => {
           const card = current.cards.find((item) => item.vocabularyId === outcome.vocabularyId)
           if (!card || !isDue(card, new Date(request.createdAt))) return []
+          const correct = ratingFromGameOutcome(outcome)
+          if (correct === null) return []
           return [scheduleReview({
             card,
             mode: request.inputMode === 'typing' ? 'game-typing' : 'game-touch',
-            correct: ratingFromGameOutcome(outcome),
+            correct,
             responseMs: outcome.responseMs,
             usedHint: outcome.usedHint,
             now: new Date(request.createdAt),
@@ -487,7 +489,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
         const link = document.createElement('a')
         link.href = URL.createObjectURL(blob)
-        link.download = `vocab-siege-backup-${new Date().toISOString().slice(0, 10)}.json`
+        link.download = `wordforge-backup-${new Date().toISOString().slice(0, 10)}.json`
         link.click()
         URL.revokeObjectURL(link.href)
       },

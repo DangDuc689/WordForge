@@ -212,7 +212,7 @@ export interface GameWord {
 
 export interface GameOutcome {
   vocabularyId: string
-  terminal: 'killed' | 'breached'
+  terminal: 'killed' | 'breached' | 'incomplete'
   responseMs: number
   usedHint: boolean
   hadTargetMistake: boolean

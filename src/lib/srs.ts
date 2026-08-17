@@ -86,26 +86,39 @@ export function scheduleReview(args: {
   }
 }
 
-export function ratingFromGameOutcome(outcome: GameOutcome): boolean {
+export function ratingFromGameOutcome(outcome: GameOutcome): boolean | null {
+  if (outcome.terminal === 'incomplete') return null
   return outcome.terminal === 'killed'
 }
 
-/** Collapse repeated game appearances into one review event per vocabulary item. */
 export function aggregateGameOutcomes(outcomes: GameOutcome[]): GameOutcome[] {
-  const grouped = new Map<string, GameOutcome>()
+  const grouped = new Map<string, { outcome: GameOutcome, killCount: number, breachCount: number }>()
   for (const outcome of outcomes) {
     const previous = grouped.get(outcome.vocabularyId)
     const roundedOutcome = { ...outcome, responseMs: Math.round(outcome.responseMs) }
-    if (!previous) { grouped.set(outcome.vocabularyId, roundedOutcome); continue }
+    if (!previous) { 
+      grouped.set(outcome.vocabularyId, {
+        outcome: roundedOutcome,
+        killCount: outcome.terminal === 'killed' ? 1 : 0,
+        breachCount: outcome.terminal === 'breached' ? 1 : 0
+      })
+      continue 
+    }
     grouped.set(outcome.vocabularyId, {
-      ...previous,
-      terminal: previous.terminal === 'breached' || outcome.terminal === 'breached' ? 'breached' : 'killed',
-      responseMs: Math.round(Math.max(previous.responseMs, roundedOutcome.responseMs)),
-      usedHint: previous.usedHint || outcome.usedHint,
-      hadTargetMistake: previous.hadTargetMistake || outcome.hadTargetMistake,
+      outcome: {
+        ...previous.outcome,
+        responseMs: Math.round(Math.max(previous.outcome.responseMs, roundedOutcome.responseMs)),
+        usedHint: previous.outcome.usedHint || outcome.usedHint,
+        hadTargetMistake: previous.outcome.hadTargetMistake || outcome.hadTargetMistake,
+      },
+      killCount: previous.killCount + (outcome.terminal === 'killed' ? 1 : 0),
+      breachCount: previous.breachCount + (outcome.terminal === 'breached' ? 1 : 0)
     })
   }
-  return [...grouped.values()]
+  return [...grouped.values()].map(({ outcome, killCount, breachCount }) => ({
+    ...outcome,
+    terminal: breachCount > 0 ? 'breached' : killCount >= 2 ? 'killed' : 'incomplete'
+  }))
 }
 
 export function isDue(card: SrsCard | undefined, now = new Date()): boolean {

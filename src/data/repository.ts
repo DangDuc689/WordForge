@@ -135,7 +135,7 @@ const legacyLevel = (rating: number | null | undefined): ReviewEvent['rating'] =
   rating === 4 ? 6 : rating === 3 ? 4 : rating === 2 ? 2 : 1
 
 function normalizeCard(card: SrsCard): SrsCard {
-  if (card.memoryLevel >= 1 && card.memoryLevel <= 6) return card
+  if (card.memoryLevel >= 1 && card.memoryLevel <= 7) return card
   const memoryLevel = legacyLevel(card.lastRating)
   return { ...card, memoryLevel, lastRating: card.lastRating === null ? null : memoryLevel }
 }
@@ -145,7 +145,7 @@ function prepareSnapshot(snapshot: AppSnapshot): AppSnapshot {
   const legacy = cards.some((card) => !(card.memoryLevel >= 1 && card.memoryLevel <= 6))
   const decks = (snapshot.decks ?? []).map((deck) => ({
     ...deck,
-    source: deck.source ?? (deck.name === 'Vocab Siege Starter' ? 'starter' as const : 'manual' as const),
+    source: deck.source ?? ((deck.name === 'Vocab Siege Starter' || deck.name === 'WordForge Starter') ? 'starter' as const : 'manual' as const),
     sourceKey: deck.sourceKey ?? '',
   }))
   const deckSources = new Map(decks.map((deck) => [deck.id, deck.source]))

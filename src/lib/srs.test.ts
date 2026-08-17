@@ -39,12 +39,28 @@ describe('seven-level memory schedule', () => {
   it('maps game completion to correct/incorrect and aggregates appearances', () => {
     expect(ratingFromGameOutcome({ vocabularyId: 'a', terminal: 'killed', responseMs: 1000, usedHint: false, hadTargetMistake: false })).toBe(true)
     expect(ratingFromGameOutcome({ vocabularyId: 'a', terminal: 'breached', responseMs: 3000, usedHint: false, hadTargetMistake: false })).toBe(false)
+    expect(ratingFromGameOutcome({ vocabularyId: 'a', terminal: 'incomplete', responseMs: 3000, usedHint: false, hadTargetMistake: false })).toBeNull()
     expect(nextMemoryLevel({ memoryLevel: 7 } as never, true)).toBe(7)
-    const result = aggregateGameOutcomes([
+    
+    const incomplete = aggregateGameOutcomes([
+      { vocabularyId: 'a', terminal: 'killed', responseMs: 1000, usedHint: false, hadTargetMistake: false },
+    ])
+    expect(incomplete).toHaveLength(1)
+    expect(incomplete[0].terminal).toBe('incomplete')
+    
+    const killed = aggregateGameOutcomes([
       { vocabularyId: 'a', terminal: 'killed', responseMs: 1000, usedHint: false, hadTargetMistake: false },
       { vocabularyId: 'a', terminal: 'killed', responseMs: 9000, usedHint: false, hadTargetMistake: true },
     ])
-    expect(result).toHaveLength(1)
-    expect(result[0].responseMs).toBe(9000)
+    expect(killed).toHaveLength(1)
+    expect(killed[0].terminal).toBe('killed')
+    expect(killed[0].responseMs).toBe(9000)
+
+    const breached = aggregateGameOutcomes([
+      { vocabularyId: 'a', terminal: 'killed', responseMs: 1000, usedHint: false, hadTargetMistake: false },
+      { vocabularyId: 'a', terminal: 'breached', responseMs: 2000, usedHint: false, hadTargetMistake: false },
+    ])
+    expect(breached).toHaveLength(1)
+    expect(breached[0].terminal).toBe('breached')
   })
 })
