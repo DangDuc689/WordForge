@@ -5027,6 +5027,13 @@ kbd {
   gap: 12px;
 }
 
+.level-badge-column {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
 .level-badge-pill {
   display: inline-flex;
   align-items: center;
@@ -5037,6 +5044,129 @@ kbd {
   font-weight: 800;
   color: #0f172a;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--level-color) 40%, transparent);
+}
+
+.level-casual-review-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--level-color) 40%, var(--border));
+  background: color-mix(in srgb, var(--level-color) 16%, var(--surface));
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.level-casual-review-btn:hover:not(:disabled) {
+  background: var(--level-color);
+  color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--level-color) 50%, transparent);
+  border-color: var(--level-color);
+}
+
+.level-casual-review-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.level-casual-review-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+/* ── Review choice popup ── */
+.review-choice-popup {
+  position: relative;
+  z-index: 40;
+}
+
+.review-choice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.review-choice-card {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  z-index: 40;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: reviewChoiceIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes reviewChoiceIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.review-choice-title {
+  display: block;
+  padding: 6px 10px 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+.review-choice-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.review-choice-option:hover {
+  background: var(--hover);
+}
+
+.review-choice-option:active {
+  background: var(--active);
+}
+
+.review-choice-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.review-choice-option strong {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.review-choice-option small {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--faint);
+  line-height: 1.3;
 }
 
 .level-title-group h4 {

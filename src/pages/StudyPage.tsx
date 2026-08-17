@@ -64,6 +64,7 @@ function MemoryLevelList({
   adjustingId,
   onClose,
   voice,
+  onStartCasualReview,
 }: { 
   level: number, 
   words: (VocabularyItem & { dueAt: string })[], 
@@ -72,9 +73,12 @@ function MemoryLevelList({
   adjustingId: string | null,
   onClose?: () => void,
   voice: TtsVoice,
+  onStartCasualReview?: (words: (VocabularyItem & { dueAt: string })[], level: number) => void,
 }) {
+  const navigate = useNavigate()
   const info = memoryLevelInfo(level as any)
   const [search, setSearch] = useState('')
+  const [showReviewChoice, setShowReviewChoice] = useState(false)
   const { speak: speakTts, isLoading: isTtsLoading } = useTts(voice)
 
   const handlePlayAudio = (e: React.MouseEvent, text: string) => {
@@ -95,9 +99,54 @@ function MemoryLevelList({
     <div className="memory-level-list-wrapper" style={{ '--level-color': info.color } as React.CSSProperties}>
       <div className="memory-level-list-header">
         <div className="level-title-group">
-          <span className="level-badge-pill" style={{ backgroundColor: info.color }}>
-            LV{level}
-          </span>
+          <div className="level-badge-column">
+            <span className="level-badge-pill" style={{ backgroundColor: info.color }}>
+              LV{level}
+            </span>
+            <button
+              type="button"
+              className="level-casual-review-btn"
+              onClick={() => setShowReviewChoice(true)}
+              disabled={words.length === 0}
+              title={words.length === 0 ? 'Không có từ vựng để ôn' : `Ôn tập ${words.length} từ ở Cấp độ ${level}`}
+            >
+              Ôn tập
+            </button>
+            {showReviewChoice && (
+              <div className="review-choice-popup">
+                <div className="review-choice-backdrop" onClick={() => setShowReviewChoice(false)} />
+                <div className="review-choice-card">
+                  <span className="review-choice-title">Chọn cách ôn tập</span>
+                  <button
+                    className="review-choice-option"
+                    onClick={() => {
+                      setShowReviewChoice(false)
+                      onStartCasualReview?.(words, level)
+                    }}
+                  >
+                    <span className="review-choice-icon">🗂</span>
+                    <span>
+                      <strong>Flashcard</strong>
+                      <small>Lật thẻ ôn từng từ</small>
+                    </span>
+                  </button>
+                  <button
+                    className="review-choice-option"
+                    onClick={() => {
+                      setShowReviewChoice(false)
+                      navigate(`/game?source=learned&deck=${words[0]?.deckId ?? 'all'}`)
+                    }}
+                  >
+                    <span className="review-choice-icon">🎮</span>
+                    <span>
+                      <strong>Vocab Siege</strong>
+                      <small>Ôn qua game gõ từ</small>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <div>
             <h4>{info.label}</h4>
             <span className="level-word-count">{words.length} từ vựng</span>
@@ -228,6 +277,27 @@ export function StudyPage() {
   const { speak: speakTts, isLoading: isTtsLoading, prefetch } = useTts(snapshot.profile.ttsVoice)
   const [selectedMemoryLevel, setSelectedMemoryLevel] = useState<number | null>(null)
   const [adjustingId, setAdjustingId] = useState<string | null>(null)
+  const [casualSession, setCasualSession] = useState<{ level: number; words: (VocabularyItem & { dueAt: string })[] } | null>(null)
+
+  const handleStartCasualReview = (wordsToReview: (VocabularyItem & { dueAt: string })[], targetLevel: number) => {
+    if (!wordsToReview || wordsToReview.length === 0) return
+    setCasualSession({ level: targetLevel, words: [...wordsToReview] })
+    setIndex(0)
+    setPhase('preview')
+    setIsFlipped(false)
+    setAnswer('')
+    setCorrect(false)
+    startedAt.current = Date.now()
+  }
+
+  const handleExitCasualReview = () => {
+    setCasualSession(null)
+    setIndex(0)
+    setPhase('entry')
+    setIsFlipped(false)
+    setAnswer('')
+    setCorrect(false)
+  }
 
   const handleDecrement = async (id: string) => {
     try {
@@ -324,7 +394,8 @@ export function StudyPage() {
   const [correct, setCorrect] = useState(false)
   const [busy, setBusy] = useState(false)
   const startedAt = useRef(Date.now())
-  const currentWord = queue[index]
+  const currentWord = casualSession ? casualSession.words[index] : queue[index]
+  const sessionTotal = casualSession ? casualSession.words.length : queue.length
   const current = useMemo(() => {
     if (!currentWord) return undefined
     const senses = vocabularySenses(currentWord)
@@ -345,7 +416,7 @@ export function StudyPage() {
 
   const resetForNext = () => {
     setIndex((value) => value + 1)
-    setPhase(mode === 'learn' ? 'preview' : 'question')
+    setPhase(mode === 'learn' || casualSession ? 'preview' : 'question')
     setIsFlipped(false)
     setAnswer(''); setCorrect(false); startedAt.current = Date.now()
   }
@@ -365,6 +436,10 @@ export function StudyPage() {
 
   const grade = async () => {
     if (!current) return
+    if (casualSession) {
+      resetForNext()
+      return
+    }
     setBusy(true)
     await reviewWord({
       vocabularyId: current.id,
@@ -403,45 +478,106 @@ export function StudyPage() {
   }
 
   // Step 3: All words finished or empty queue
-  if (!current) return (
-    <div className="page study-page">
-      <PageHeader 
-        eyebrow="Spaced Repetition" 
-        title="Ôn từ đến hạn" 
-        actions={
-          <select value={deckId} onChange={(event) => { setDeckId(event.target.value); setIndex(0) }}>
-            <option value="all">Tất cả bộ từ</option>
-            {snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
-          </select>
-        } 
-      />
+  if (!current) {
+    if (casualSession) {
+      return (
+        <div className="page study-page">
+          <PageHeader 
+            eyebrow={`Ôn luyện tự do · Cấp độ ${casualSession.level}`} 
+            title={<>Hoàn thành lượt <span className="accent">Ôn Cấp {casualSession.level}</span></>} 
+            actions={
+              <button type="button" className="button mini secondary" onClick={handleExitCasualReview}>
+                ✕ Thoát ôn tự do
+              </button>
+            } 
+          />
 
-      <div className="memory-stats-container">
-        <div className="panel memory-stats-card">
-          <h3>Thống kê từ vựng của bạn</h3>
-          <p className="total-learned">Tổng số từ đã học: <br /><strong>{memoryStats.learnedCount.toLocaleString()}</strong><span>/{activeIds.size}</span></p>
-          
-          <MemoryBarChart stats={memoryStats.stats} maxCount={memoryStats.maxCount} selectedLevel={selectedMemoryLevel} onSelectLevel={setSelectedMemoryLevel} />
-          {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} voice={snapshot.profile.ttsVoice} />}
+          <div className="memory-stats-container">
+            <section className="panel empty-study" style={{ maxWidth: '640px', margin: '40px auto' }}>
+              <div className="victory-core">
+                <CheckIcon className="stepper-icon" />
+              </div>
+              <h2>Hoàn thành lượt ôn tập!</h2>
+              <p>
+                Bạn đã ôn tập xong <strong>{casualSession.words.length}</strong> từ vựng ở <strong>Cấp độ {casualSession.level}</strong>.
+                <br />
+                <em style={{ display: 'inline-block', marginTop: '6px', opacity: 0.85 }}>
+                  (Chế độ ôn tự do không làm thay đổi cấp độ hay chu kỳ Spaced Repetition của từ.)
+                </em>
+              </p>
+              <div className="button-row" style={{ marginTop: '24px', justifyContent: 'center', gap: '12px' }}>
+                <button 
+                  type="button" 
+                  className="dock-btn primary" 
+                  onClick={() => handleStartCasualReview(casualSession.words, casualSession.level)}
+                >
+                  ↻ Ôn lại lần nữa
+                </button>
+                <button 
+                  type="button" 
+                  className="dock-btn secondary" 
+                  onClick={handleExitCasualReview}
+                >
+                  Quay về danh sách
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
+      )
+    }
 
-        <section className="panel empty-study">
-          <div className="victory-core">
-            <CheckIcon className="stepper-icon" />
+    return (
+      <div className="page study-page">
+        <PageHeader 
+          eyebrow="Spaced Repetition" 
+          title="Ôn từ đến hạn" 
+          actions={
+            <select value={deckId} onChange={(event) => { setDeckId(event.target.value); setIndex(0) }}>
+              <option value="all">Tất cả bộ từ</option>
+              {snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
+            </select>
+          } 
+        />
+
+        <div className="memory-stats-container">
+          <div className="panel memory-stats-card">
+            <h3>Thống kê từ vựng của bạn</h3>
+            <p className="total-learned">Tổng số từ đã học: <br /><strong>{memoryStats.learnedCount.toLocaleString()}</strong><span>/{activeIds.size}</span></p>
+            
+            <MemoryBarChart stats={memoryStats.stats} maxCount={memoryStats.maxCount} selectedLevel={selectedMemoryLevel} onSelectLevel={setSelectedMemoryLevel} />
+            {selectedMemoryLevel !== null && (
+              <MemoryLevelList 
+                level={selectedMemoryLevel} 
+                words={listWords} 
+                onDecrement={handleDecrement} 
+                onReset={handleReset} 
+                adjustingId={adjustingId} 
+                voice={snapshot.profile.ttsVoice} 
+                onClose={() => setSelectedMemoryLevel(null)}
+                onStartCasualReview={handleStartCasualReview}
+              />
+            )}
           </div>
-          <h2>{index > 0 ? 'Hoàn thành lượt ôn tập!' : 'Đã ôn xong hôm nay'}</h2>
-          <p>{index > 0 ? `Bạn đã hoàn thành ${index} từ vựng. Cấp độ ghi nhớ SRS đã được cập nhật.` : 'Không có từ nào đến hạn cần ôn lúc này.'}</p>
-          <div className="button-row" style={{ marginTop: '20px', justifyContent: 'center' }}>
-            <Link className="dock-btn primary" to="/game">Củng cố bằng game</Link>
-            <Link className="dock-btn secondary" to="/">Về tổng quan</Link>
-          </div>
-        </section>
+
+          <section className="panel empty-study">
+            <div className="victory-core">
+              <CheckIcon className="stepper-icon" />
+            </div>
+            <h2>{index > 0 ? 'Hoàn thành lượt ôn tập!' : 'Đã ôn xong hôm nay'}</h2>
+            <p>{index > 0 ? `Bạn đã hoàn thành ${index} từ vựng. Cấp độ ghi nhớ SRS đã được cập nhật.` : 'Không có từ nào đến hạn cần ôn lúc này.'}</p>
+            <div className="button-row" style={{ marginTop: '20px', justifyContent: 'center' }}>
+              <Link className="dock-btn primary" to="/game">Củng cố bằng game</Link>
+              <Link className="dock-btn secondary" to="/">Về tổng quan</Link>
+            </div>
+          </section>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // Step 1: Entry / Word Selection
-  if (phase === 'entry') {
+  if (phase === 'entry' && !casualSession) {
     return (
       <div className="page study-page">
         <PageHeader 
@@ -462,7 +598,18 @@ export function StudyPage() {
             <p className="total-learned">Tổng số từ đã học: <br /><strong>{memoryStats.learnedCount.toLocaleString()}</strong><span>/{activeIds.size}</span></p>
             
             <MemoryBarChart stats={memoryStats.stats} maxCount={memoryStats.maxCount} selectedLevel={selectedMemoryLevel} onSelectLevel={setSelectedMemoryLevel} />
-            {selectedMemoryLevel !== null && <MemoryLevelList level={selectedMemoryLevel} words={listWords} onDecrement={handleDecrement} onReset={handleReset} adjustingId={adjustingId} voice={snapshot.profile.ttsVoice} onClose={() => setSelectedMemoryLevel(null)} />}
+            {selectedMemoryLevel !== null && (
+              <MemoryLevelList 
+                level={selectedMemoryLevel} 
+                words={listWords} 
+                onDecrement={handleDecrement} 
+                onReset={handleReset} 
+                adjustingId={adjustingId} 
+                voice={snapshot.profile.ttsVoice} 
+                onClose={() => setSelectedMemoryLevel(null)}
+                onStartCasualReview={handleStartCasualReview}
+              />
+            )}
           </div>
 
           <div className="panel review-action-card">
@@ -569,20 +716,26 @@ export function StudyPage() {
   return (
     <div className="page study-page">
       <PageHeader 
-        eyebrow="Spaced Repetition" 
-        title={<>Ôn từ <span className="accent">đến hạn</span></>} 
-        description="Nhìn gợi ý tiếng Việt, gõ đáp án tiếng Anh hoặc lật thẻ kiểm tra." 
+        eyebrow={casualSession ? `Ôn luyện tự do · Cấp độ ${casualSession.level}` : "Spaced Repetition"} 
+        title={casualSession ? <>Ôn tập <span className="accent">Cấp độ {casualSession.level}</span> (Tự do)</> : <>Ôn từ <span className="accent">đến hạn</span></>} 
+        description={casualSession ? "Chế độ ôn tập nhẹ nhàng — Giữ nguyên tiến trình và cấp độ SRS." : "Nhìn gợi ý tiếng Việt, gõ đáp án tiếng Anh hoặc lật thẻ kiểm tra."} 
         actions={
-          <select value={deckId} onChange={(event) => { setDeckId(event.target.value); setIndex(0) }}>
-            <option value="all">Tất cả bộ từ</option>
-            {snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
-          </select>
+          casualSession ? (
+            <button type="button" className="button mini secondary" onClick={handleExitCasualReview}>
+              ✕ Thoát ôn tự do
+            </button>
+          ) : (
+            <select value={deckId} onChange={(event) => { setDeckId(event.target.value); setIndex(0) }}>
+              <option value="all">Tất cả bộ từ</option>
+              {snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
+            </select>
+          )
         } 
       />
 
       <div className="session-progress" style={{ maxWidth: '960px', margin: '0 auto 20px auto' }}>
-        <span style={{ width: `${Math.round(((index + 1) / queue.length) * 100)}%` }} />
-        <small>{index + 1} / {queue.length}</small>
+        <span style={{ width: `${Math.round(((index + 1) / sessionTotal) * 100)}%` }} />
+        <small>{index + 1} / {sessionTotal}</small>
       </div>
 
       {/* 3D Tactile Flashcard Perspective Viewport */}
@@ -642,7 +795,9 @@ export function StudyPage() {
                 {getMemoryLevel(current.id).label}
               </span>
               <span className="part-of-speech" style={{ color: correct ? 'var(--green)' : 'var(--danger)', fontWeight: 700 }}>
-                {correct ? 'CHÍNH XÁC (+1 CẤP)' : 'CHƯA ĐÚNG (-1 CẤP)'}
+                {casualSession
+                  ? (correct ? 'CHÍNH XÁC (ÔN TỰ DO)' : 'CHƯA ĐÚNG (ÔN TỰ DO)')
+                  : (correct ? 'CHÍNH XÁC (+1 CẤP)' : 'CHƯA ĐÚNG (-1 CẤP)')}
               </span>
             </div>
 
@@ -712,7 +867,9 @@ export function StudyPage() {
                 >
                   <span>{correct ? 'Chính xác! Tiếp tục' : 'Chưa đúng · Tiếp tục'}</span>
                   <span style={{ opacity: 0.9, fontWeight: 500, fontSize: '0.88rem', marginLeft: '6px' }}>
-                    ({correct ? `Tăng lên ${info.label}` : `Trừ 1 cấp xuống ${info.label}`})
+                    {casualSession
+                      ? `(Ôn tự do · Giữ nguyên Cấp độ ${casualSession.level})`
+                      : (correct ? `(Tăng lên ${info.label})` : `(Trừ 1 cấp xuống ${info.label})`)}
                   </span>
                   <kbd className="kbd-badge" style={{ background: 'rgba(255, 255, 255, 0.25)', borderColor: 'rgba(255, 255, 255, 0.4)', color: '#ffffff' }}>↵ Enter</kbd>
                 </button>
