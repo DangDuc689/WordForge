@@ -469,7 +469,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       async updateProfile(input) {
         const profile = { ...snapshot.profile, ...input, updatedAt: nowIso() }
-        await repository.saveProfile(profile)
+        try {
+          await repository.saveProfile(profile)
+        } catch (e) {
+          console.error('Failed to save profile to remote:', e)
+          // Allow local state to update anyway so the user can use the voice for this session
+        }
         setSnapshot((state) => state ? ({ ...state, profile }) : state)
       },
       async savePractice(deckId, format, targetIds, content, score = null) {

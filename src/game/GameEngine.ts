@@ -38,6 +38,8 @@ interface Monster {
   seed: number
   killPhase: 1 | 2
   freezeUntil: number
+  knockbackVx: number
+  knockbackVy: number
 }
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }
@@ -51,7 +53,7 @@ const COLORS = { 1: '#4fd6a0', 2: '#f5c451', 3: '#f5628f' }
 const POINTS = { 1: 10, 2: 20, 3: 35 }
 const DAMAGE = { 1: 8, 2: 12, 3: 18 }
 const WORDS_PER_WAVE = 6
-const SPAWN_INTERVAL = 2.5
+const SPAWN_INTERVAL = 1
 const MONSTER_SPEED = 22
 
 export function buildWordQueue(words: GameWord[], random = Math.random) {
@@ -145,7 +147,7 @@ export class GameEngine {
     const rect = this.canvas.getBoundingClientRect()
     this.dpr = Math.min(2, window.devicePixelRatio || 1)
     this.width = Math.max(320, rect.width); this.height = Math.max(360, rect.height)
-    this.centerX = this.width / 2; this.centerY = this.height / 2
+    this.centerX = this.width / 2; this.centerY = this.height * 0.80
     this.canvas.width = this.width * this.dpr; this.canvas.height = this.height * this.dpr
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
   }
@@ -187,7 +189,15 @@ export class GameEngine {
     }
 
     monster.killPhase = 2
-    monster.freezeUntil = this.state.time + 6
+    monster.freezeUntil = this.state.time + 8
+
+    // Tính hướng đẩy lùi (từ center → quái)
+    const KNOCKBACK_FORCE = 450  // px/s — điều chỉnh con số này để thay đổi lực đẩy
+    const dx = monster.x - this.centerX
+    const dy = monster.y - this.centerY
+    const dist = Math.hypot(dx, dy) || 1
+    monster.knockbackVx = (dx / dist) * KNOCKBACK_FORCE
+    monster.knockbackVy = (dy / dist) * KNOCKBACK_FORCE
 
     this.beep(440, .06, 'sine')
     this.burst(monster.x, monster.y, '#38bdf8', 6)
@@ -302,6 +312,28 @@ export class GameEngine {
         monster.x += (vx + px * wobble) * dt
         monster.y += (vy + py * wobble) * dt
       }
+      
+      // Áp dụng knockback velocity (luôn chạy, kể cả khi freeze)
+      if (monster.knockbackVx !== 0 || monster.knockbackVy !== 0) {
+        monster.x += monster.knockbackVx * dt
+        monster.y += monster.knockbackVy * dt
+
+        // Decay: giảm tốc mỗi frame (frame-rate independent)
+        const decay = Math.pow(0.04, dt)  // ≈ 0.92 tại 60fps
+        monster.knockbackVx *= decay
+        monster.knockbackVy *= decay
+
+        // Dừng khi velocity quá nhỏ
+        if (Math.abs(monster.knockbackVx) < 1 && Math.abs(monster.knockbackVy) < 1) {
+          monster.knockbackVx = 0
+          monster.knockbackVy = 0
+        }
+
+        // Clamp trong biên canvas
+        monster.x = Math.max(monster.radius, Math.min(this.width - monster.radius, monster.x))
+        monster.y = Math.max(monster.radius, Math.min(this.height - monster.radius, monster.y))
+      }
+
       if (this.distance(monster) < 42 + monster.radius) this.breach(monster)
     }
     this.monsters = this.monsters.filter((monster) => monster.dying !== -1 && !(monster.killed && monster.dying <= 0))
@@ -312,7 +344,7 @@ export class GameEngine {
 
   private startWave(wave: number) {
     this.state.wave = wave; this.waveTotal = Math.min(WORDS_PER_WAVE, this.wordQueue.length); this.spawned = 0
-    this.spawnInterval = SPAWN_INTERVAL; this.spawnTimer = .25; this.interWaveDelay = 1.2
+    this.spawnInterval = SPAWN_INTERVAL; this.spawnTimer = 0; this.interWaveDelay = 1
   }
 
   private updateWave(dt: number) {
@@ -346,16 +378,66 @@ export class GameEngine {
     return this.wordQueue.splice(index, 1)[0]
   }
 
+  private estimateLabelWidth(word: GameWord, inputMode: 'typing' | 'touch', killPhase: 1 | 2): number {
+    let text = killPhase === 2 ? word.english : word.vietnamese
+    // Approximate additional text from hints
+    if (inputMode === 'typing') text += '  →  X…'
+    // 9px per char + 22px padding is the rough estimation used in render()
+    return text.length * 9 + 22
+  }
+
+  private labelsOverlap(x1: number, y1: number, w1: number, x2: number, y2: number, w2: number): boolean {
+    const pad = 10
+    const left1 = x1 - w1 / 2 - pad
+    const right1 = x1 + w1 / 2 + pad
+    const top1 = y1 - 30 - pad // 30 is label height
+    const bottom1 = y1 + pad
+    
+    const left2 = x2 - w2 / 2 - pad
+    const right2 = x2 + w2 / 2 + pad
+    const top2 = y2 - 30 - pad
+    const bottom2 = y2 + pad
+
+    return !(right1 < left2 || left1 > right2 || bottom1 < top2 || top1 > bottom2)
+  }
+
   private spawn() {
     const word = this.takeNextWord()
     if (!word) return
-    const margin = 45, edge = Math.floor(Math.random() * 4)
+    
+    const radius = word.category === 'phrase' ? 30 : 24
+    const spawnRadius = Math.max(this.centerX, this.centerY, this.height - this.centerY) + 60
+    const angleMin = Math.PI + Math.PI / 6   // 210°
+    const angleMax = 2 * Math.PI - Math.PI / 6  // 330°
+    
     let x = 0, y = 0
-    if (edge === 0) { x = Math.random() * this.width; y = -margin }
-    else if (edge === 1) { x = this.width + margin; y = Math.random() * this.height }
-    else if (edge === 2) { x = Math.random() * this.width; y = this.height + margin }
-    else { x = -margin; y = Math.random() * this.height }
-    this.monsters.push({ id: crypto.randomUUID(), word, x, y, radius: word.category === 'phrase' ? 30 : 24, speed: MONSTER_SPEED, spawnAt: this.state.time, hintUntil: 0, dying: 0, killed: false, seed: Math.random() * Math.PI * 2, killPhase: 1, freezeUntil: 0 })
+    let bestX = 0, bestY = 0
+    let overlapFound = true
+    const newLabelWidth = this.estimateLabelWidth(word, this.inputMode, 1)
+
+    for (let attempts = 0; attempts < 8; attempts++) {
+      const angle = angleMin + Math.random() * (angleMax - angleMin)
+      x = this.centerX + Math.cos(angle) * spawnRadius
+      y = this.centerY + Math.sin(angle) * spawnRadius
+      
+      const newLabelY = y - radius - 41
+
+      overlapFound = false
+      for (const m of this.liveMonsters()) {
+        const existingLabelWidth = this.estimateLabelWidth(m.word, this.inputMode, m.killPhase)
+        const existingLabelY = m.y - m.radius - 41
+        
+        if (this.labelsOverlap(x, newLabelY, newLabelWidth, m.x, existingLabelY, existingLabelWidth)) {
+          overlapFound = true
+          break
+        }
+      }
+      
+      bestX = x; bestY = y
+      if (!overlapFound) break
+    }
+
+    this.monsters.push({ id: crypto.randomUUID(), word, x: bestX, y: bestY, radius, speed: MONSTER_SPEED, spawnAt: this.state.time, hintUntil: 0, dying: 0, killed: false, seed: Math.random() * Math.PI * 2, killPhase: 1, freezeUntil: 0, knockbackVx: 0, knockbackVy: 0 })
   }
 
   private kill(monster: Monster, usedHint: boolean) {

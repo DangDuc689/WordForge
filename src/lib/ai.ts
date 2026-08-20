@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { AiPracticeSet, AiVocabularyDraft } from '../domain/types'
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { fetchCambridgeLocal } from './cambridge'
 
 const vocabularyDraftSchema = z.object({
   english: z.string().min(1),
@@ -66,8 +67,13 @@ async function invoke<T>(functionName: string, body: Record<string, unknown>, sc
   return parsed.data as T
 }
 
-export const enrichVocabulary = (term: string, deckId: string): Promise<AiVocabularyDraft> =>
-  invoke('ai-enrich-vocabulary', { term, deckId }, vocabularyDraftSchema)
+export async function enrichVocabulary(term: string, deckId: string): Promise<AiVocabularyDraft> {
+  if (import.meta.env.DEV) {
+    const cambridgeData = await fetchCambridgeLocal(term)
+    return invoke('ai-enrich-vocabulary', { term, deckId, cambridgeData }, vocabularyDraftSchema)
+  }
+  return invoke('ai-enrich-vocabulary', { term, deckId }, vocabularyDraftSchema)
+}
 
 export const generatePractice = (deckId: string | null, format: 'reading' | 'dialogue' | 'dictation'): Promise<AiPracticeSet> =>
   invoke('ai-generate-practice', { deckId, format }, practiceSetSchema)

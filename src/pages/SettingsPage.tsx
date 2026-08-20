@@ -3,7 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { useTts, TTS_VOICES } from '../lib/tts'
+import { useTts, TTS_VOICES, useBrowserVoices } from '../lib/tts'
 import { DEFAULT_TTS_VOICE } from '../domain/types'
 
 /* ── Minimal 2px-stroke line-art icons ─────────────────────────────── */
@@ -142,6 +142,7 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const selectedVoice = snapshot.profile.ttsVoice ?? DEFAULT_TTS_VOICE
   const { speak, isLoading: isTtsLoading } = useTts(selectedVoice)
+  const browserVoices = useBrowserVoices()
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
@@ -223,7 +224,18 @@ export function SettingsPage() {
               onChange={e => void updateProfile({ ttsVoice: e.target.value as typeof selectedVoice })}
               className="settings-select"
             >
-              {TTS_VOICES.map((voice) => <option key={voice.value} value={voice.value}>{voice.label} — {voice.description}</option>)}
+              <optgroup label="Giọng cao cấp (Cần mạng)">
+                {TTS_VOICES.map((voice) => <option key={voice.value} value={voice.value}>{voice.label} — {voice.description}</option>)}
+              </optgroup>
+              {browserVoices.length > 0 && (
+                <optgroup label="Giọng trình duyệt (Nhanh, Offline)">
+                  {browserVoices.map((voice) => (
+                    <option key={`browser://${voice.name}`} value={`browser://${voice.name}`}>
+                      {voice.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
           <div className="button-row">

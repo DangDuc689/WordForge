@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from 'react'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 import { supabase } from './supabase'
 import { DEFAULT_TTS_VOICE, type TtsVoice } from '../domain/types'
 
@@ -104,6 +104,36 @@ export async function speakTts(text: string, voice: TtsVoice = DEFAULT_TTS_VOICE
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
   setState({ key, status: 'loading' })
 
+  if (voice.startsWith('browser://')) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setState({ key: null, status: 'error' })
+      return 'failed'
+    }
+    const voiceName = voice.slice(10)
+    const utterance = new SpeechSynthesisUtterance(normalized)
+    const voices = window.speechSynthesis.getVoices()
+    const targetVoice = voices.find(v => v.name === voiceName)
+    if (targetVoice) utterance.voice = targetVoice
+    utterance.lang = targetVoice ? targetVoice.lang : 'en-US'
+    utterance.rate = RATE_CONFIG[rate].browser
+
+    return new Promise((resolve) => {
+      utterance.onstart = () => {
+        if (requestId === sequence) setState({ key, status: 'playing' })
+      }
+      utterance.onend = () => {
+        if (requestId === sequence) setState({ key: null, status: 'idle' })
+        resolve('browser')
+      }
+      utterance.onerror = (e) => {
+        console.warn('Browser TTS error', e)
+        if (requestId === sequence) setState({ key: null, status: 'error' })
+        resolve('failed')
+      }
+      window.speechSynthesis.speak(utterance)
+    })
+  }
+
   try {
     let url = urlCache.get(key)
     if (!url) {
@@ -170,7 +200,7 @@ export function useTts(voice: TtsVoice = DEFAULT_TTS_VOICE) {
     const normalized = normalizeTtsText(text)
     if (!normalized || !supabase) return
     const key = ttsCacheKey(normalized, voice, rate)
-    if (urlCache.has(key)) return
+    if (voice.startsWith('browser://') || urlCache.has(key)) return
 
     try {
       const optimisticUrl = await getOptimisticUrl(normalized, voice, rate)
@@ -201,4 +231,25 @@ export function useTts(voice: TtsVoice = DEFAULT_TTS_VOICE) {
   }, [voice])
 
   return { speak, stop: stopTts, isLoading, prefetch, state: getTtsState() }
+}
+
+export function useBrowserVoices() {
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    const updateVoices = () => {
+      const allVoices = window.speechSynthesis.getVoices()
+      const popularKeywords = ['Google US English', 'Google UK English Female', 'Google UK English Male', 'David', 'Zira', 'Mark', 'Samantha', 'Alex', 'Daniel']
+      const popular = allVoices.filter(v => 
+        v.lang.startsWith('en') && 
+        popularKeywords.some(k => v.name.includes(k))
+      )
+      setVoices(popular)
+    }
+    updateVoices()
+    if ('onvoiceschanged' in window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = updateVoices
+    }
+  }, [])
+  return voices
 }

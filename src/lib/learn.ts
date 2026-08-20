@@ -56,11 +56,23 @@ export function sanitizeLearnSession(session: LearnSession, snapshot: AppSnapsho
     }
   }
 
+  // 4. Từ trong deferred mà isPrioritized=true → thoát khỏi deferred, lên đầu queue
+  const wordMap = new Map(snapshot.vocabulary.map(w => [w.id, w]))
+  const escapedFromDeferred: string[] = []
+  const finalDeferredIds: string[] = []
+  for (const id of deferredIds) {
+    if (wordMap.get(id)?.isPrioritized && !queueSet.has(id)) {
+      escapedFromDeferred.push(id)
+    } else {
+      finalDeferredIds.push(id)
+    }
+  }
+
   return {
     ...session,
     selectedDeckId,
-    queueIds,
-    deferredIds,
+    queueIds: [...escapedFromDeferred, ...queueIds],
+    deferredIds: finalDeferredIds,
     updatedAt: now
   }
 }
@@ -83,7 +95,17 @@ export function generateNextBatch(session: LearnSession, snapshot: AppSnapshot, 
 
   const deferredSet = new Set(cleanSession.deferredIds)
   // Normal words: available and not in the deferred list
-  const normalWords = available.filter(w => !deferredSet.has(w.id))
+  const normalWords = available
+    .filter(w => !deferredSet.has(w.id))
+    .sort((a, b) => {
+      const aPrio = a.isPrioritized ? 1 : 0
+      const bPrio = b.isPrioritized ? 1 : 0
+      if (aPrio !== bPrio) return bPrio - aPrio
+      if (a.isPrioritized && b.isPrioritized) {
+        return b.updatedAt.localeCompare(a.updatedAt)
+      }
+      return 0
+    })
 
   let nextQueueIds: string[] = []
   let nextDeferredIds = [...cleanSession.deferredIds]

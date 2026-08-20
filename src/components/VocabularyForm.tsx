@@ -55,6 +55,17 @@ export function VocabularyForm({ word, defaultDeckId, onClose }: Props) {
   const askAi = async () => {
     if (!draft.english.trim()) { setMessage('Hãy nhập từ tiếng Anh trước.'); return }
     if (!snapshot.profile.aiEnabled) { setMessage('Hãy bật AI trong Cài đặt trước.'); return }
+
+    const hasExistingData = !!(draft.ipa || draft.exampleEn || draft.vietnamese)
+    if (hasExistingData) {
+      const confirmed = window.confirm(
+        'Từ này đã có dữ liệu.\n' +
+        'Hoàn thiện lại sẽ ghi đè nghĩa, IPA, ví dụ và cấp độ hiện tại.\n\n' +
+        'Tiếp tục?'
+      )
+      if (!confirmed) return
+    }
+
     setAiBusy(true); setMessage('')
     try {
       const result = await enrichVocabulary(draft.english.trim(), deckId)

@@ -37,5 +37,14 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     coverage: { reporter: ['text', 'html'] }
+  },
+  server: {
+    proxy: {
+      '/api/cambridge': {
+        target: 'https://dictionary.cambridge.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/cambridge/, ''),
+      },
+    },
   }
 })
