@@ -230,6 +230,7 @@ export interface GameSaveRequest {
   createdAt: string
   outcomes: GameOutcome[]
   reviewEventIds: Record<string, string>
+  wordRepetitions?: 1 | 2
 }
 
 export interface LearnSession {

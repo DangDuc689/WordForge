@@ -111,7 +111,21 @@ export function GamePage() {
   const [searchParams] = useSearchParams()
   const [deckId, setDeckId] = useState(searchParams.get('deck') ?? snapshot.decks[0]?.id ?? 'all')
   const [source, setSource] = useState<GamePoolSource>(searchParams.get('source') === 'due' ? 'due' : searchParams.get('source') === 'learned' ? 'learned' : 'all')
+  const [repetitions, setRepetitions] = useState<1 | 2>(() => {
+    if (typeof window === 'undefined') return 2
+    const saved = localStorage.getItem('wordforge_game_repetitions')
+    return saved === '1' ? 1 : 2
+  })
   const selectedIds = useMemo(() => searchParams.get('ids')?.split(',').filter(Boolean) ?? [], [searchParams])
+
+  const handleRepetitionsChange = (val: 1 | 2) => {
+    setRepetitions(val)
+    try {
+      localStorage.setItem('wordforge_game_repetitions', String(val))
+    } catch (e) {
+      console.error('Failed to save repetitions to localStorage:', e)
+    }
+  }
   const [running, setRunning] = useState(false)
   const [hud, setHud] = useState<GameSnapshot | null>(null)
   const [answer, setAnswer] = useState('')
@@ -155,7 +169,8 @@ export function GamePage() {
           durationSeconds: Math.round(finalState.time), inputMode,
           createdAt: new Date().toISOString(),
           outcomes,
-          reviewEventIds: Object.fromEntries(outcomes.map(o => [o.vocabularyId, crypto.randomUUID()]))
+          reviewEventIds: Object.fromEntries(outcomes.map(o => [o.vocabularyId, crypto.randomUUID()])),
+          wordRepetitions: repetitions,
         }
         setSaveRequest(req)
         setSaveStatus('saving')
@@ -175,7 +190,7 @@ export function GamePage() {
             })
         }))
       },
-    })
+    }, repetitions)
     engineRef.current = engine
     engine.setSpeedMultiplier(speedRef.current)
     engine.start()
@@ -200,7 +215,7 @@ export function GamePage() {
     window.addEventListener('resize', resize); window.addEventListener('keydown', hotkeys)
     setTimeout(() => inputRef.current?.focus(), 0)
     return () => { engine.destroy(); engineRef.current = null; window.removeEventListener('resize', resize); window.removeEventListener('keydown', hotkeys) }
-  }, [deckId, inputMode, running, source, selectedIds])
+  }, [deckId, inputMode, repetitions, running, source, selectedIds])
 
   useBlocker(() => {
     if (hud?.phase === 'over' && saveStatus !== 'saved') {
@@ -268,8 +283,30 @@ export function GamePage() {
   const accuracy = hud ? (hud.correct + hud.wrong ? Math.round(hud.correct / (hud.correct + hud.wrong) * 100) : 100) : 100
 
   if (!running) return <div className="page game-landing">
-    <PageHeader eyebrow="Typing tower defense" title={<>Vocab <span className="accent">Siege</span></>} description="Mỗi từ xuất hiện đúng 2 lần với tốc độ cố định. Trận đấu kết thúc khi bạn đi hết bộ từ." />
-    <section className="game-hero panel"><div className="game-core-art"><span /><i /><b /></div><div><span className="eyebrow">Chuẩn bị phòng thủ</span><h2>Chọn nguồn từ để vào trận</h2><p>Mỗi từ xuất hiện đúng 2 lần. Từ đến hạn sẽ được cập nhật lịch ôn sau trận.</p><label>Bộ từ<select value={deckId} onChange={(event) => setDeckId(event.target.value)}><option value="all">Tất cả bộ từ</option>{snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label><label>Nguồn từ<select value={source} onChange={(event) => setSource(event.target.value as GamePoolSource)}><option value="due">Từ đến hạn (ôn)</option><option value="learned">Từ đã học</option><option value="all">Toàn bộ active</option></select></label><div className="game-readiness"><span><b>{pool.length}</b><small>từ trong trận</small></span><span><b>{pool.filter((word) => word.isDue).length}</b><small>đến hạn</small></span><span><b>{inputMode === 'touch' ? 'Chạm quái' : 'Gõ chữ'}</b><small>chế độ tự động</small></span></div>{pool.length < 1 ? <div className="notice danger">Không có từ phù hợp với nguồn đã chọn.</div> : <button className="button primary large" onClick={() => setRunning(true)}><span>Bắt đầu siege</span> <IconArrowRight /></button>}</div></section>  </div>
+    <PageHeader
+      eyebrow="Typing tower defense"
+      title={<>Vocab <span className="accent">Siege</span></>}
+      description={repetitions === 1 ? "Mỗi từ xuất hiện 1 lần với tốc độ cố định. Trận đấu kết thúc khi bạn đi hết bộ từ." : "Mỗi từ xuất hiện đúng 2 lần với tốc độ cố định. Trận đấu kết thúc khi bạn đi hết bộ từ."}
+    />
+    <section className="game-hero panel">
+      <div className="game-core-art"><span /><i /><b /></div>
+      <div>
+        <span className="eyebrow">Chuẩn bị phòng thủ</span>
+        <h2>Chọn nguồn từ để vào trận</h2>
+        <p>{repetitions === 1 ? "Mỗi từ xuất hiện 1 lần (Ôn nhanh). Đúng 1 lần sẽ được tăng cấp độ ghi nhớ sau trận." : "Mỗi từ xuất hiện đúng 2 lần (Tiêu chuẩn). Cần đúng cả 2 lần để tăng cấp độ ghi nhớ."}</p>
+        <label>Bộ từ<select value={deckId} onChange={(event) => setDeckId(event.target.value)}><option value="all">Tất cả bộ từ</option>{snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label>
+        <label>Nguồn từ<select value={source} onChange={(event) => setSource(event.target.value as GamePoolSource)}><option value="due">Từ đến hạn (ôn)</option><option value="learned">Từ đã học</option><option value="all">Toàn bộ active</option></select></label>
+        <label>Số lần xuất hiện mỗi từ<select value={repetitions} onChange={(event) => handleRepetitionsChange(Number(event.target.value) as 1 | 2)}><option value={1}>1 lần · Ôn nhanh (đúng 1 lần là tăng cấp)</option><option value={2}>2 lần · Tiêu chuẩn (cần đúng 2 lần)</option></select></label>
+        <div className="game-readiness">
+          <span><b>{pool.length}</b><small>từ trong trận</small></span>
+          <span><b>{pool.length * repetitions}</b><small>lượt quái</small></span>
+          <span><b>{pool.filter((word) => word.isDue).length}</b><small>đến hạn</small></span>
+          <span><b>{inputMode === 'touch' ? 'Chạm quái' : 'Gõ chữ'}</b><small>chế độ tự động</small></span>
+        </div>
+        {pool.length < 1 ? <div className="notice danger">Không có từ phù hợp với nguồn đã chọn.</div> : <button className="button primary large" onClick={() => setRunning(true)}><span>Bắt đầu siege</span> <IconArrowRight /></button>}
+      </div>
+    </section>
+  </div>
 
   if (hud?.phase === 'over') {
     const currentDrillIndex = drillIndex ?? 0

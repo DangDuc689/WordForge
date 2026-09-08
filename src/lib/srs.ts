@@ -91,7 +91,7 @@ export function ratingFromGameOutcome(outcome: GameOutcome): boolean | null {
   return outcome.terminal === 'killed'
 }
 
-export function aggregateGameOutcomes(outcomes: GameOutcome[]): GameOutcome[] {
+export function aggregateGameOutcomes(outcomes: GameOutcome[], requiredKills = 2): GameOutcome[] {
   const grouped = new Map<string, { outcome: GameOutcome, killCount: number, breachCount: number }>()
   for (const outcome of outcomes) {
     const previous = grouped.get(outcome.vocabularyId)
@@ -117,7 +117,7 @@ export function aggregateGameOutcomes(outcomes: GameOutcome[]): GameOutcome[] {
   }
   return [...grouped.values()].map(({ outcome, killCount, breachCount }) => ({
     ...outcome,
-    terminal: breachCount > 0 ? 'breached' : killCount >= 2 ? 'killed' : 'incomplete'
+    terminal: breachCount > 0 ? 'breached' : killCount >= requiredKills ? 'killed' : 'incomplete'
   }))
 }
 

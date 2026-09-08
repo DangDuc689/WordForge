@@ -62,5 +62,16 @@ describe('seven-level memory schedule', () => {
     ])
     expect(breached).toHaveLength(1)
     expect(breached[0].terminal).toBe('breached')
+
+    const singleKillWithRequired1 = aggregateGameOutcomes([
+      { vocabularyId: 'a', terminal: 'killed', responseMs: 1000, usedHint: false, hadTargetMistake: false },
+    ], 1)
+    expect(singleKillWithRequired1).toHaveLength(1)
+    expect(singleKillWithRequired1[0].terminal).toBe('killed')
+
+    const breachedWithRequired1 = aggregateGameOutcomes([
+      { vocabularyId: 'a', terminal: 'breached', responseMs: 1000, usedHint: false, hadTargetMistake: false },
+    ], 1)
+    expect(breachedWithRequired1[0].terminal).toBe('breached')
   })
 })

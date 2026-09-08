@@ -56,13 +56,16 @@ const WORDS_PER_WAVE = 6
 const SPAWN_INTERVAL = 1
 const MONSTER_SPEED = 22
 
-export function buildWordQueue(words: GameWord[], random = Math.random) {
+export function buildWordQueue(words: GameWord[], random = Math.random, repetitions: 1 | 2 = 2) {
   const shuffle = (items: GameWord[]) => {
     for (let index = items.length - 1; index > 0; index -= 1) {
       const swapIndex = Math.floor(random() * (index + 1))
       ;[items[index], items[swapIndex]] = [items[swapIndex], items[index]]
     }
     return items
+  }
+  if (repetitions === 1) {
+    return shuffle([...words])
   }
   return [...shuffle([...words]), ...shuffle([...words])]
 }
@@ -104,12 +107,18 @@ export class GameEngine {
   private audioContext: AudioContext | null = null
   private destroyed = false
 
-  constructor(canvas: HTMLCanvasElement, words: GameWord[], inputMode: 'typing' | 'touch', callbacks: Callbacks) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    words: GameWord[],
+    inputMode: 'typing' | 'touch',
+    callbacks: Callbacks,
+    repetitions: 1 | 2 = 2
+  ) {
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Canvas 2D không khả dụng')
     this.canvas = canvas
     this.ctx = context
-    this.wordQueue = buildWordQueue(words)
+    this.wordQueue = buildWordQueue(words, Math.random, repetitions)
     this.inputMode = inputMode
     this.callbacks = callbacks
     this.state = {

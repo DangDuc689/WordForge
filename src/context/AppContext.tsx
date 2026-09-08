@@ -412,7 +412,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       async recordGame(request) {
         const current = requireSnapshot()
 
-        const reviewResults = request.source === 'learned' ? [] : aggregateGameOutcomes(request.outcomes).flatMap((outcome) => {
+        const reviewResults = request.source === 'learned' ? [] : aggregateGameOutcomes(request.outcomes, request.wordRepetitions ?? 2).flatMap((outcome) => {
           const card = current.cards.find((item) => item.vocabularyId === outcome.vocabularyId)
           if (!card || !isDue(card, new Date(request.createdAt))) return []
           const correct = ratingFromGameOutcome(outcome)

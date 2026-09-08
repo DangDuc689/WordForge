@@ -5,10 +5,16 @@ import { buildWordQueue, GameEngine } from './GameEngine'
 const words: GameWord[] = ['alpha', 'beta', 'gamma'].map((english, index) => ({ id: String(index), english, vietnamese: `nghia-${index}`, acceptedAnswers: [], category: 'noun', tier: 1, isDue: false }))
 
 describe('buildWordQueue', () => {
-  it('schedules every vocabulary item exactly twice', () => {
+  it('schedules every vocabulary item exactly twice by default', () => {
     const queue = buildWordQueue(words, () => 0.5)
     expect(queue).toHaveLength(words.length * 2)
     for (const word of words) expect(queue.filter((queued) => queued.id === word.id)).toHaveLength(2)
+  })
+
+  it('schedules every vocabulary item exactly once when repetitions is 1', () => {
+    const queue = buildWordQueue(words, () => 0.5, 1)
+    expect(queue).toHaveLength(words.length)
+    for (const word of words) expect(queue.filter((queued) => queued.id === word.id)).toHaveLength(1)
   })
 })
 
