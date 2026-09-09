@@ -6934,6 +6934,65 @@ textarea:focus-visible,
   color: var(--cyan);
 }
 
+.dialogue-bubble-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.dialogue-bubble-actions,
+.typing-bubble-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialogue-action-btn,
+.typing-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.2s, transform 0.15s, color 0.2s, background-color 0.2s, border-color 0.2s;
+  padding: 3px 5px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.dialogue-action-btn:hover,
+.typing-action-btn:hover {
+  opacity: 1;
+  transform: scale(1.08);
+  color: var(--cyan);
+  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+
+.dialogue-action-btn.active,
+.typing-action-btn.active {
+  opacity: 1;
+  color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  border-color: var(--cyan);
+}
+
+.dialogue-translation-text,
+.typing-translation-text {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  background: color-mix(in srgb, var(--bg2) 80%, transparent);
+  border-left: 3px solid var(--cyan);
+  border-radius: 4px;
+  font-size: 0.92rem;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+
 /* ==========================================
    Typing Dialogue (Mewtab-style interactive)
    ========================================== */

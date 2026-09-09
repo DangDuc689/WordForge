@@ -58,9 +58,16 @@ export function ttsCacheKey(text: string, voice: TtsVoice, rate: TtsRate): strin
 function fallbackSpeak(text: string, voice: TtsVoice, rate: TtsRate): boolean {
   if (typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return false
   const utterance = new SpeechSynthesisUtterance(text)
-  utterance.lang = voice === 'en-GB-SoniaNeural' ? 'en-GB' : 'en-US'
+  const isGb = voice === 'en-GB-SoniaNeural'
+  utterance.lang = isGb ? 'en-GB' : 'en-US'
   utterance.rate = RATE_CONFIG[rate].browser
-  window.speechSynthesis.cancel()
+
+  const allVoices = window.speechSynthesis.getVoices()
+  const matchingVoice = allVoices.find((v) => v.lang === (isGb ? 'en-GB' : 'en-US'))
+    || allVoices.find((v) => v.lang.startsWith(isGb ? 'en-GB' : 'en-US'))
+    || allVoices.find((v) => v.lang.startsWith('en'))
+  if (matchingVoice) utterance.voice = matchingVoice
+
   window.speechSynthesis.speak(utterance)
   return true
 }
@@ -173,7 +180,15 @@ export async function speakTts(text: string, voice: TtsVoice = DEFAULT_TTS_VOICE
       setState({ key: null, status: usedFallback ? 'idle' : 'error' })
     }
     setState({ key, status: 'playing' })
-    await audio.play()
+    try {
+      await audio.play()
+    } catch (playError) {
+      if (requestId !== sequence) return 'cancelled'
+      console.warn('Audio play blocked or failed, using fallback speech:', playError)
+      const usedFallback = fallbackSpeak(normalized, voice, rate)
+      setState({ key: null, status: usedFallback ? 'idle' : 'error' })
+      return usedFallback ? 'browser' : 'failed'
+    }
     if (requestId !== sequence) return 'cancelled'
     return 'edge'
   } catch (error) {

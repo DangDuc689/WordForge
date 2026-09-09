@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
-import type { PracticeSession, AiPracticeSet } from '../domain/types'
+import { DEFAULT_TTS_VOICE, type PracticeSession, type AiPracticeSet } from '../domain/types'
 import { generatePractice } from '../lib/ai'
 import { createLocalDictationSet, diffSentence, isSentenceCorrect } from '../lib/dictation'
 import { Link } from 'react-router-dom'
@@ -22,6 +22,10 @@ const IconHeadphones = ({ size = 16 }: { size?: number }) => (
 
 const IconVolume2 = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+)
+
+const IconLanguages = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
 )
 
 const IconHelpCircle = ({ size = 16 }: { size?: number }) => (
@@ -89,12 +93,14 @@ function HighlightedText({ text, glossary }: { text: string; glossary?: { englis
 
 export function PracticePage() {
   const { snapshot, savePractice, updatePracticeSession } = useApp()
-  const { speak: speakTts, isLoading: isTtsLoading, prefetch } = useTts(snapshot.profile.ttsVoice)
+  const selectedVoice = snapshot.profile.ttsVoice || DEFAULT_TTS_VOICE
+  const { speak: speakTts, isLoading: isTtsLoading, prefetch } = useTts(selectedVoice)
   const [deckId, setDeckId] = useState<string>('all')
   const [format, setFormat] = useState<'reading' | 'dialogue' | 'dictation'>('reading')
   const [session, setSession] = useState<PracticeSession | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [hintsShown, setHintsShown] = useState<Record<string, boolean>>({})
+  const [dialogueTranslations, setDialogueTranslations] = useState<Record<number, boolean>>({})
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -429,31 +435,71 @@ export function PracticePage() {
                   <article style={{ lineHeight: 1.65, fontSize: '1.1rem' }}>
                     {session.format === 'dialogue' ? (
                       <div className="dialogue-container">
-                        {session.content.passage.split(/\\n|\n/).map((line, idx) => {
-                          const trimmed = line.trim()
-                          if (!trimmed) return null
-                          const match = trimmed.match(/^([A-Za-z0-9\s]+):(.*)$/)
-                          if (match) {
-                            const speaker = match[1].trim()
-                            const dialogueText = match[2].trim()
-                            const isA = speaker.toUpperCase() === 'A'
-                            return (
-                              <div key={idx} className={`dialogue-bubble-wrapper ${isA ? 'speaker-a' : 'speaker-b'}`}>
-                                <div className="dialogue-bubble">
-                                  <span className="dialogue-speaker-name">
-                                    Lượt nói {speaker}
-                                  </span>
-                                  <HighlightedText text={dialogueText} glossary={session.content.glossary} />
+                        {(() => {
+                          const linesVi = (session.content.passageVi || '')
+                            .split(/\\n|\n/)
+                            .map((l) => l.trim())
+                            .filter(Boolean)
+                            .map((line) => {
+                              const m = line.match(/^([A-Za-z0-9\s]+):(.*)$/)
+                              return m ? m[2].trim() : line
+                            })
+
+                          return session.content.passage.split(/\\n|\n/).map((line, idx) => {
+                            const trimmed = line.trim()
+                            if (!trimmed) return null
+                            const match = trimmed.match(/^([A-Za-z0-9\s]+):(.*)$/)
+                            if (match) {
+                              const speaker = match[1].trim()
+                              const dialogueText = match[2].trim()
+                              const isA = speaker.toUpperCase() === 'A'
+                              return (
+                                <div key={idx} className={`dialogue-bubble-wrapper ${isA ? 'speaker-a' : 'speaker-b'}`}>
+                                  <div className="dialogue-bubble">
+                                    <div className="dialogue-bubble-top">
+                                      <span className="dialogue-speaker-name">
+                                        Lượt nói {speaker}
+                                      </span>
+                                      <div className="dialogue-bubble-actions">
+                                        <button
+                                          type="button"
+                                          className="dialogue-action-btn"
+                                          onClick={() => speakSentence(dialogueText, 0.9)}
+                                          title="Nghe câu này"
+                                        >
+                                          <IconVolume2 size={13} />
+                                        </button>
+                                        {Boolean(linesVi[idx]) && (
+                                          <button
+                                            type="button"
+                                            className={`dialogue-action-btn ${dialogueTranslations[idx] ? 'active' : ''}`}
+                                            onClick={() =>
+                                              setDialogueTranslations((prev) => ({ ...prev, [idx]: !prev[idx] }))
+                                            }
+                                            title={dialogueTranslations[idx] ? 'Ẩn dịch' : 'Dịch câu này'}
+                                          >
+                                            <IconLanguages size={13} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <HighlightedText text={dialogueText} glossary={session.content.glossary} />
+                                    {Boolean(dialogueTranslations[idx] && linesVi[idx]) && (
+                                      <div className="dialogue-translation-text">
+                                        {linesVi[idx]}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
+                              )
+                            }
+                            return (
+                              <div key={idx} style={{ padding: '0.5rem 1rem', fontStyle: 'italic', opacity: 0.85 }}>
+                                <HighlightedText text={trimmed} glossary={session.content.glossary} />
                               </div>
                             )
-                          }
-                          return (
-                            <div key={idx} style={{ padding: '0.5rem 1rem', fontStyle: 'italic', opacity: 0.85 }}>
-                              <HighlightedText text={trimmed} glossary={session.content.glossary} />
-                            </div>
-                          )
-                        })}
+                          })
+                        })()}
                       </div>
                     ) : (
                       <p style={{ whiteSpace: 'pre-wrap' }}>

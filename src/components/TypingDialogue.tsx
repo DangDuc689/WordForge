@@ -21,6 +21,13 @@ const IconVolume = () => (
   </svg>
 )
 
+// Icon dịch cho nút hiển thị bản dịch câu
+const IconLanguages = () => (
+  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>
+  </svg>
+)
+
 export function TypingDialogue({ passage, passageVi, speakSentence, onComplete }: TypingDialogueProps) {
   // Parse đoạn hội thoại thành danh sách các dòng
   const lines = useMemo<DialogueLine[]>(() => {
@@ -38,9 +45,22 @@ export function TypingDialogue({ passage, passageVi, speakSentence, onComplete }
       .filter(l => l.text.length > 0)
   }, [passage])
 
+  // Parse các dòng dịch tiếng Việt tương ứng
+  const linesVi = useMemo<string[]>(() => {
+    if (!passageVi) return []
+    return passageVi.split(/\\n|\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(line => {
+        const match = line.match(/^([A-Za-z0-9\s]+):(.*)$/)
+        return match ? match[2].trim() : line
+      })
+  }, [passageVi])
+
   const [activeLineIdx, setActiveLineIdx] = useState(0)
   const [activeCharIdx, setActiveCharIdx] = useState(0)
   const [completedLines, setCompletedLines] = useState<Set<number>>(new Set())
+  const [showTranslations, setShowTranslations] = useState<Record<number, boolean>>({})
   const [allDone, setAllDone] = useState(false)
   const [wrongFlash, setWrongFlash] = useState(false)
   const [isFocused, setIsFocused] = useState(true)
@@ -216,19 +236,40 @@ export function TypingDialogue({ passage, passageVi, speakSentence, onComplete }
                     {line.speaker ? `Lượt nói ${line.speaker}` : ''}
                   </span>
                   {(isCompleted || isActive) && (
-                    <button
-                      type="button"
-                      className="typing-replay-btn"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        speakSentence(line.text, 0.9)
-                      }}
-                      title="Nghe lại"
-                    >
-                      <IconVolume />
-                    </button>
+                    <div className="typing-bubble-actions">
+                      <button
+                        type="button"
+                        className="typing-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          speakSentence(line.text, 0.9)
+                        }}
+                        title="Nghe câu này"
+                      >
+                        <IconVolume />
+                      </button>
+                      {Boolean(linesVi[idx]) && (
+                        <button
+                          type="button"
+                          className={`typing-action-btn ${showTranslations[idx] ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setShowTranslations((prev) => ({ ...prev, [idx]: !prev[idx] }))
+                          }}
+                          title={showTranslations[idx] ? 'Ẩn dịch' : 'Dịch câu này'}
+                        >
+                          <IconLanguages />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
+
+                {Boolean(showTranslations[idx] && linesVi[idx]) && (
+                  <div className="typing-translation-text">
+                    {linesVi[idx]}
+                  </div>
+                )}
 
                 {isCompleted && (
                   <span className="typing-done-text">
