@@ -19,6 +19,7 @@ import { STARTER_WORDS } from '../data/starterWords'
 import { deduplicateSnapshot, mergeVocabularyItems, normalizeHeadword, withVocabularySenses } from '../domain/vocabulary'
 import { aggregateGameOutcomes, buildDashboardStats, createSrsCard, isDue, memoryLevelInfo, ratingFromGameOutcome, scheduleReview } from '../lib/srs'
 import { sanitizeLearnSession, generateNextBatch } from '../lib/learn'
+import { getStoredTtsVoice, saveStoredTtsVoice } from '../lib/tts'
 import { useAuth } from './AuthContext'
 
 interface ReviewInput {
@@ -72,7 +73,7 @@ function createInitialSnapshot(userId: string): AppSnapshot {
       newWordsPerSession: 10,
       desiredRetention: 0.9,
       aiEnabled: false,
-      ttsVoice: DEFAULT_TTS_VOICE,
+      ttsVoice: getStoredTtsVoice(),
       createdAt: now,
       updatedAt: now,
     },
@@ -143,6 +144,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!loaded) {
         loaded = createInitialSnapshot(userId)
         await repository.restore(loaded)
+      }
+      if (loaded.profile) {
+        loaded.profile.ttsVoice = getStoredTtsVoice() || loaded.profile.ttsVoice
       }
       setSnapshot(loaded)
 
@@ -468,6 +472,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
       },
       async updateProfile(input) {
+        if (input.ttsVoice) {
+          saveStoredTtsVoice(input.ttsVoice)
+        }
         const profile = { ...snapshot.profile, ...input, updatedAt: nowIso() }
         try {
           await repository.saveProfile(profile)

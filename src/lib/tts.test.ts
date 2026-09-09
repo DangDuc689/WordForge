@@ -24,3 +24,26 @@ describe('TTS cache identity', () => {
     ])
   })
 })
+
+describe('TTS voice localStorage persistence', () => {
+  it('returns default voice when localStorage is empty', async () => {
+    localStorage.clear()
+    const { getStoredTtsVoice } = await import('./tts')
+    expect(getStoredTtsVoice()).toBe('en-US-EmmaMultilingualNeural')
+  })
+
+  it('persists and retrieves custom voice in localStorage', async () => {
+    localStorage.clear()
+    const { getStoredTtsVoice, saveStoredTtsVoice, STORAGE_KEY_TTS_VOICE } = await import('./tts')
+    saveStoredTtsVoice('en-US-AriaNeural')
+    expect(localStorage.getItem(STORAGE_KEY_TTS_VOICE)).toBe('en-US-AriaNeural')
+    expect(getStoredTtsVoice()).toBe('en-US-AriaNeural')
+  })
+
+  it('supports browser voices in localStorage', async () => {
+    localStorage.clear()
+    const { getStoredTtsVoice, saveStoredTtsVoice } = await import('./tts')
+    saveStoredTtsVoice('browser://Google US English')
+    expect(getStoredTtsVoice()).toBe('browser://Google US English')
+  })
+})

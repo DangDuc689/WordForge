@@ -3,8 +3,8 @@ import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { useTts, TTS_VOICES, useBrowserVoices } from '../lib/tts'
-import { DEFAULT_TTS_VOICE } from '../domain/types'
+import { useTts, TTS_VOICES, useBrowserVoices, saveStoredTtsVoice } from '../lib/tts'
+import type { TtsVoice } from '../domain/types'
 import { AI_MODELS, getAiConfig, saveAiConfig, testAiKey } from '../lib/aiSettings'
 
 /* ── Minimal 2px-stroke line-art icons ─────────────────────────────── */
@@ -187,14 +187,21 @@ export function SettingsPage() {
   const { snapshot, updateProfile, exportBackup, importBackup } = useApp()
   const { isLocalMode, signOut } = useAuth()
   const { theme, setTheme } = useTheme()
-  const selectedVoice = snapshot.profile.ttsVoice ?? DEFAULT_TTS_VOICE
-  const { speak, isLoading: isTtsLoading } = useTts(selectedVoice)
+  const [voiceSetting, setVoiceSetting] = useState<TtsVoice>(snapshot.profile.ttsVoice)
+  const { speak, isLoading: isTtsLoading } = useTts(voiceSetting)
   const browserVoices = useBrowserVoices()
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
   const [aiConfig, setAiConfig] = useState(() => getAiConfig())
   const [showAiKey, setShowAiKey] = useState(false)
   const [testState, setTestState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message?: string }>({ status: 'idle' })
+
+  const handleVoiceChange = (val: string) => {
+    const nextVoice = val as TtsVoice
+    setVoiceSetting(nextVoice)
+    saveStoredTtsVoice(nextVoice)
+    void updateProfile({ ttsVoice: nextVoice })
+  }
 
   const handleApiKeyChange = (val: string) => {
     const next = { ...aiConfig, apiKey: val }
@@ -381,8 +388,8 @@ export function SettingsPage() {
             <span className="settings-field-label"><IconHeadphones />Giọng tiếng Anh</span>
             <select
               id="tts-voice-select"
-              value={selectedVoice}
-              onChange={e => void updateProfile({ ttsVoice: e.target.value as typeof selectedVoice })}
+              value={voiceSetting}
+              onChange={e => handleVoiceChange(e.target.value)}
               className="settings-select"
             >
               <optgroup label="Giọng cao cấp (Cần mạng)">

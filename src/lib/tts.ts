@@ -16,6 +16,16 @@ const RATE_CONFIG: Record<TtsRate, { edge: '-10%' | '-25%'; browser: number }> =
   slow: { edge: '-25%', browser: 0.75 },
 }
 
+export const STORAGE_KEY_TTS_VOICE = 'wordforge_tts_voice'
+
+export function getStoredTtsVoice(): TtsVoice {
+  return (localStorage.getItem(STORAGE_KEY_TTS_VOICE) as TtsVoice) || DEFAULT_TTS_VOICE
+}
+
+export function saveStoredTtsVoice(voice: TtsVoice): void {
+  localStorage.setItem(STORAGE_KEY_TTS_VOICE, voice)
+}
+
 interface TtsState {
   key: string | null
   status: TtsStatus
@@ -101,22 +111,23 @@ export function stopTts() {
   setState({ key: null, status: 'idle' })
 }
 
-export async function speakTts(text: string, voice: TtsVoice = DEFAULT_TTS_VOICE, rate: TtsRate = 'normal'): Promise<'edge' | 'browser' | 'failed' | 'cancelled'> {
+export async function speakTts(text: string, voice?: TtsVoice, rate: TtsRate = 'normal'): Promise<'edge' | 'browser' | 'failed' | 'cancelled'> {
   const normalized = normalizeTtsText(text)
   if (!normalized) return 'failed'
 
-  const key = ttsCacheKey(normalized, voice, rate)
+  const effectiveVoice = voice || getStoredTtsVoice()
+  const key = ttsCacheKey(normalized, effectiveVoice, rate)
   const requestId = ++sequence
   stopAudio()
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
   setState({ key, status: 'loading' })
 
-  if (voice.startsWith('browser://')) {
+  if (effectiveVoice.startsWith('browser://')) {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       setState({ key: null, status: 'error' })
       return 'failed'
     }
-    const voiceName = voice.slice(10)
+    const voiceName = effectiveVoice.slice(10)
     const utterance = new SpeechSynthesisUtterance(normalized)
     const voices = window.speechSynthesis.getVoices()
     const targetVoice = voices.find(v => v.name === voiceName)
@@ -125,58 +136,77 @@ export async function speakTts(text: string, voice: TtsVoice = DEFAULT_TTS_VOICE
     utterance.rate = RATE_CONFIG[rate].browser
 
     return new Promise((resolve) => {
-      utterance.onstart = () => {
-        if (requestId === sequence) setState({ key, status: 'playing' })
-      }
       utterance.onend = () => {
         if (requestId === sequence) setState({ key: null, status: 'idle' })
         resolve('browser')
       }
-      utterance.onerror = (e) => {
-        console.warn('Browser TTS error', e)
+      utterance.onerror = () => {
         if (requestId === sequence) setState({ key: null, status: 'error' })
         resolve('failed')
       }
       window.speechSynthesis.speak(utterance)
+      setState({ key, status: 'playing' })
     })
   }
 
-  try {
-    let url = urlCache.get(key)
-    if (!url) {
-      if (!supabase) throw new Error('Supabase chưa được cấu hình.')
-      
-      try {
-        const optimisticUrl = await getOptimisticUrl(normalized, voice, rate)
-        const res = await fetch(optimisticUrl, { method: 'HEAD' })
-        if (res.ok) {
-          url = optimisticUrl
-        }
-      } catch (e) {
-        // Fallback to edge function if network error occurs during HEAD request
-      }
+  if (!audio) {
+    const usedFallback = fallbackSpeak(normalized, effectiveVoice, rate)
+    setState({ key: null, status: usedFallback ? 'idle' : 'error' })
+    return usedFallback ? 'browser' : 'failed'
+  }
 
-      if (!url) {
-        const { data, error } = await supabase.functions.invoke('tts-synthesize', {
-          body: { text: normalized, voice, rate: RATE_CONFIG[rate].edge },
-        })
-        if (error) throw error
-        url = parseFunctionResponse(data)
-      }
-      urlCache.set(key, url)
+  try {
+    if (urlCache.has(key)) {
+      const cachedUrl = urlCache.get(key)!
+      audio.src = cachedUrl
+      setState({ key, status: 'playing' })
+      await audio.play()
+      if (requestId !== sequence) return 'cancelled'
+      return 'edge'
     }
 
-    if (requestId !== sequence) return 'cancelled'
-    if (!audio) throw new Error('Trình duyệt không hỗ trợ audio.')
+    if (!supabase) {
+      const usedFallback = fallbackSpeak(normalized, effectiveVoice, rate)
+      setState({ key: null, status: usedFallback ? 'idle' : 'error' })
+      return usedFallback ? 'browser' : 'failed'
+    }
 
-    audio.src = url
-    audio.currentTime = 0
+    try {
+      const optimisticUrl = await getOptimisticUrl(normalized, effectiveVoice, rate)
+      const res = await fetch(optimisticUrl, { method: 'HEAD' })
+      if (res.ok) {
+        urlCache.set(key, optimisticUrl)
+        audio.src = optimisticUrl
+        setState({ key, status: 'playing' })
+        await audio.play()
+        if (requestId !== sequence) return 'cancelled'
+        return 'edge'
+      }
+    } catch (e) {
+      // Optimistic URL check failed, fallback to Edge Function synthesis
+    }
+
+    const { data, error } = await supabase.functions.invoke('tts-synthesize', {
+      body: { text: normalized, voice: effectiveVoice, rate: RATE_CONFIG[rate].edge },
+    })
+
+    if (error || !data) {
+      console.warn('Edge TTS failed, using fallback speech:', error)
+      const usedFallback = fallbackSpeak(normalized, effectiveVoice, rate)
+      setState({ key: null, status: usedFallback ? 'idle' : 'error' })
+      return usedFallback ? 'browser' : 'failed'
+    }
+
+    const audioUrl = parseFunctionResponse(data)
+    urlCache.set(key, audioUrl)
+    audio.src = audioUrl
     audio.onended = () => {
       if (requestId === sequence) setState({ key: null, status: 'idle' })
     }
     audio.onerror = () => {
       if (requestId !== sequence) return
-      const usedFallback = fallbackSpeak(normalized, voice, rate)
+      console.warn('Audio playback failed for synthesised file, using fallback speech')
+      const usedFallback = fallbackSpeak(normalized, effectiveVoice, rate)
       setState({ key: null, status: usedFallback ? 'idle' : 'error' })
     }
     setState({ key, status: 'playing' })
@@ -185,7 +215,7 @@ export async function speakTts(text: string, voice: TtsVoice = DEFAULT_TTS_VOICE
     } catch (playError) {
       if (requestId !== sequence) return 'cancelled'
       console.warn('Audio play blocked or failed, using fallback speech:', playError)
-      const usedFallback = fallbackSpeak(normalized, voice, rate)
+      const usedFallback = fallbackSpeak(normalized, effectiveVoice, rate)
       setState({ key: null, status: usedFallback ? 'idle' : 'error' })
       return usedFallback ? 'browser' : 'failed'
     }
@@ -193,7 +223,7 @@ export async function speakTts(text: string, voice: TtsVoice = DEFAULT_TTS_VOICE
     return 'edge'
   } catch (error) {
     if (requestId !== sequence) return 'cancelled'
-    const usedFallback = fallbackSpeak(normalized, voice, rate)
+    const usedFallback = fallbackSpeak(normalized, effectiveVoice, rate)
     setState({ key: null, status: usedFallback ? 'idle' : 'error' })
     if (usedFallback) return 'browser'
     console.warn('TTS playback failed:', error)
@@ -201,7 +231,8 @@ export async function speakTts(text: string, voice: TtsVoice = DEFAULT_TTS_VOICE
   }
 }
 
-export function useTts(voice: TtsVoice = DEFAULT_TTS_VOICE) {
+export function useTts(voice?: TtsVoice) {
+  const effectiveVoice = voice || getStoredTtsVoice()
   const [, forceRender] = useReducer((value: number) => value + 1, 0)
 
   useEffect(() => {
@@ -209,16 +240,16 @@ export function useTts(voice: TtsVoice = DEFAULT_TTS_VOICE) {
     return () => { unsubscribe() }
   }, [])
 
-  const speak = useCallback((text: string, rate: TtsRate = 'normal') => speakTts(text, voice, rate), [voice])
+  const speak = useCallback((text: string, rate: TtsRate = 'normal') => speakTts(text, effectiveVoice, rate), [effectiveVoice])
   
   const prefetch = useCallback(async (text: string, rate: TtsRate = 'normal'): Promise<void> => {
     const normalized = normalizeTtsText(text)
     if (!normalized || !supabase) return
-    const key = ttsCacheKey(normalized, voice, rate)
-    if (voice.startsWith('browser://') || urlCache.has(key)) return
+    const key = ttsCacheKey(normalized, effectiveVoice, rate)
+    if (effectiveVoice.startsWith('browser://') || urlCache.has(key)) return
 
     try {
-      const optimisticUrl = await getOptimisticUrl(normalized, voice, rate)
+      const optimisticUrl = await getOptimisticUrl(normalized, effectiveVoice, rate)
       const res = await fetch(optimisticUrl, { method: 'HEAD' })
       if (res.ok) {
         urlCache.set(key, optimisticUrl)
@@ -230,7 +261,7 @@ export function useTts(voice: TtsVoice = DEFAULT_TTS_VOICE) {
 
     try {
       const { data, error } = await supabase.functions.invoke('tts-synthesize', {
-        body: { text: normalized, voice, rate: RATE_CONFIG[rate].edge },
+        body: { text: normalized, voice: effectiveVoice, rate: RATE_CONFIG[rate].edge },
       })
       if (!error && data) {
         urlCache.set(key, parseFunctionResponse(data))
@@ -238,12 +269,12 @@ export function useTts(voice: TtsVoice = DEFAULT_TTS_VOICE) {
     } catch (e) {
       // Ignore errors on prefetch
     }
-  }, [voice])
+  }, [effectiveVoice])
 
   const isLoading = useCallback((text: string, rate: TtsRate = 'normal') => {
     const current = getTtsState()
-    return current.status === 'loading' && current.key === ttsCacheKey(text, voice, rate)
-  }, [voice])
+    return current.status === 'loading' && current.key === ttsCacheKey(text, effectiveVoice, rate)
+  }, [effectiveVoice])
 
   return { speak, stop: stopTts, isLoading, prefetch, state: getTtsState() }
 }
