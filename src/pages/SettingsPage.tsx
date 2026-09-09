@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useTts, TTS_VOICES, useBrowserVoices } from '../lib/tts'
 import { DEFAULT_TTS_VOICE } from '../domain/types'
+import { AI_MODELS, getAiConfig, saveAiConfig, testAiKey } from '../lib/aiSettings'
 
 /* ── Minimal 2px-stroke line-art icons ─────────────────────────────── */
 const IconSun = ({ size = 20 }: { size?: number }) => (
@@ -97,6 +98,52 @@ const IconGlobe = ({ size = 14 }: { size?: number }) => (
   </svg>
 )
 
+const IconEye = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)
+
+const IconEyeOff = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+)
+
+const IconCheck = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+)
+
+const IconExternalLink = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-1px', marginLeft: '4px' }}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+)
+
+const IconKey = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: '6px' }}>
+    <path d="m21 2-2 2m-1.5 1.5L14 9l-3-3L9 8l2 2-3 3-2-2-2 2 5 5 1.5-1.5M15.5 7.5l-3-3" />
+    <circle cx="7.5" cy="16.5" r="4.5" />
+  </svg>
+)
+
+const IconCpu = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: '6px' }}>
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <rect x="9" y="9" width="6" height="6" />
+    <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
+    <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
+    <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
+    <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
+  </svg>
+)
+
 /* ── Pill toggle switch ───────────────────────────────────────────────── */
 function ToggleSwitch({
   id, checked, onChange, label, description,
@@ -145,6 +192,32 @@ export function SettingsPage() {
   const browserVoices = useBrowserVoices()
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [aiConfig, setAiConfig] = useState(() => getAiConfig())
+  const [showAiKey, setShowAiKey] = useState(false)
+  const [testState, setTestState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message?: string }>({ status: 'idle' })
+
+  const handleApiKeyChange = (val: string) => {
+    const next = { ...aiConfig, apiKey: val }
+    setAiConfig(next)
+    saveAiConfig(next.apiKey, next.model)
+    if (testState.status !== 'idle') setTestState({ status: 'idle' })
+  }
+
+  const handleModelChange = (val: string) => {
+    const next = { ...aiConfig, model: val }
+    setAiConfig(next)
+    saveAiConfig(next.apiKey, next.model)
+  }
+
+  const handleTestKey = async () => {
+    setTestState({ status: 'loading' })
+    const result = await testAiKey(aiConfig.apiKey)
+    if (result.ok) {
+      setTestState({ status: 'success', message: 'Kết nối thành công! API Key hợp lệ và sẵn sàng sử dụng.' })
+    } else {
+      setTestState({ status: 'error', message: result.error || 'Kiểm tra thất bại.' })
+    }
+  }
 
   const importFile = async (file?: File) => {
     if (!file) return
@@ -204,13 +277,101 @@ export function SettingsPage() {
         </section>
 
         <section className="panel settings-section no-lift">
-          <SectionHeader icon={<IconZap />} title="AI Practice" subtitle="Gemini 3.5 Flash Lite chỉ nhận phần dữ liệu học cần thiết" />
+          <SectionHeader icon={<IconZap />} title="AI Practice" subtitle="Sử dụng Gemini API Key cá nhân để luyện tập & làm giàu từ vựng" />
           <ToggleSwitch id="ai-enabled" checked={snapshot.profile.aiEnabled}
             onChange={v => void updateProfile({ aiEnabled: v })}
             label="Bật tính năng AI" description="AI luôn tạo bản nháp, không tự lưu từ." />
+
+          {snapshot.profile.aiEnabled && (
+            <div className="settings-ai-config">
+              {!aiConfig.apiKey.trim() && (
+                <div className="settings-callout warning">
+                  <IconAlertCircle size={15} />
+                  <span>Bạn cần nhập <b>Gemini API Key</b> để sử dụng các tính năng AI.</span>
+                </div>
+              )}
+
+              <label className="settings-field-row" htmlFor="ai-model-select">
+                <span className="settings-field-label"><IconCpu />Mô hình AI (Model)</span>
+                <select
+                  id="ai-model-select"
+                  value={aiConfig.model}
+                  onChange={e => handleModelChange(e.target.value)}
+                  className="settings-select"
+                >
+                  {AI_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="settings-field-vertical">
+                <label className="settings-field-label" htmlFor="ai-key-input">
+                  <IconKey />Gemini API Key
+                </label>
+                <div className="settings-input-group">
+                  <input
+                    id="ai-key-input"
+                    type={showAiKey ? 'text' : 'password'}
+                    value={aiConfig.apiKey}
+                    onChange={e => handleApiKeyChange(e.target.value)}
+                    placeholder="Dán API Key (AIzaSy...) vào đây"
+                    className="settings-input"
+                    autoComplete="off"
+                    spellCheck="false"
+                  />
+                  <button
+                    type="button"
+                    className="button ghost settings-input-action-btn"
+                    onClick={() => setShowAiKey(!showAiKey)}
+                    title={showAiKey ? 'Ẩn key' : 'Hiện key'}
+                    aria-label={showAiKey ? 'Ẩn key' : 'Hiện key'}
+                  >
+                    {showAiKey ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-ai-actions">
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => void handleTestKey()}
+                  disabled={testState.status === 'loading' || !aiConfig.apiKey.trim()}
+                >
+                  {testState.status === 'loading' ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
+                </button>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="settings-link-btn"
+                >
+                  Lấy API Key miễn phí tại Google AI Studio <IconExternalLink size={13} />
+                </a>
+              </div>
+
+              {testState.status === 'success' && (
+                <div className="settings-callout success">
+                  <IconCheck size={14} />
+                  <span>{testState.message}</span>
+                </div>
+              )}
+
+              {testState.status === 'error' && (
+                <div className="settings-callout error">
+                  <IconAlertCircle size={14} />
+                  <span>{testState.message}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="privacy-note">
             <IconInfo size={13} />
-            Gemini API sẽ nhận nội dung request để tạo phản hồi. Không gửi email hoặc dữ liệu nhận dạng; chỉ gửi từ mục tiêu và từ nền đã biết.
+            API Key chỉ lưu tại trình duyệt của bạn (localStorage), không lưu trên máy chủ WordForge. Request AI chỉ gửi từ mục tiêu và từ nền cần luyện tập tới Google Gemini.
           </div>
         </section>
 

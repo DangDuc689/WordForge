@@ -1,6 +1,7 @@
 import { ChatMessage, AICharacter, CorrectionFeedback } from '../domain/aiChat'
 import { supabase } from './supabase'
 import { FunctionsHttpError } from '@supabase/supabase-js'
+import { getAiConfig } from './aiSettings'
 
 /**
  * Sends a message to the AI character and returns the AI's response via Supabase Edge Function.
@@ -14,6 +15,11 @@ export async function sendChatMessage(
     throw new Error('Supabase client is not initialized.')
   }
 
+  const { apiKey, model } = getAiConfig()
+  if (!apiKey) {
+    throw new Error('Bạn chưa cài đặt Gemini API Key. Vui lòng vào Cài đặt để nhập API Key cá nhân của bạn.')
+  }
+
   // Remove timestamp and correction from history to minimize payload and match expected format
   const cleanMessages = chatHistory.map(msg => ({
     role: msg.role,
@@ -25,7 +31,11 @@ export async function sendChatMessage(
       action: 'chat',
       systemPrompt: character.systemPrompt,
       messages: cleanMessages,
-      userMessage: newMessageText
+      userMessage: newMessageText,
+    },
+    headers: {
+      'x-gemini-api-key': apiKey,
+      'x-gemini-model': model,
     }
   })
 
@@ -37,7 +47,9 @@ export async function sendChatMessage(
           throw new Error(String(errData.error))
         }
       } catch (e) {
-        // Fallback
+        if (e instanceof Error && e.message !== 'Lỗi kết nối tới AI Chat.') {
+          throw e
+        }
       }
     }
     throw new Error(error.message || 'Lỗi kết nối tới AI Chat.')
@@ -62,6 +74,9 @@ export async function generateReplySuggestions(
 ): Promise<string[]> {
   if (!supabase) return []
 
+  const { apiKey, model } = getAiConfig()
+  if (!apiKey) return []
+
   const recentHistory = chatHistory.slice(-5)
   const transcript = recentHistory.map(msg => `${msg.role === 'assistant' ? character.name : 'User'}: ${msg.content}`).join('\n')
 
@@ -71,7 +86,11 @@ export async function generateReplySuggestions(
         action: 'suggest',
         transcript: transcript,
         characterName: character.name,
-        characterRole: character.role
+        characterRole: character.role,
+      },
+      headers: {
+        'x-gemini-api-key': apiKey,
+        'x-gemini-model': model,
       }
     })
 
@@ -93,11 +112,18 @@ export async function generateReplySuggestions(
 export async function translateMessageText(text: string): Promise<string | null> {
   if (!supabase || !text.trim()) return null
 
+  const { apiKey, model } = getAiConfig()
+  if (!apiKey) return null
+
   try {
     const { data, error } = await supabase.functions.invoke('ai-chat', {
       body: {
         action: 'translate',
-        text: text
+        text: text,
+      },
+      headers: {
+        'x-gemini-api-key': apiKey,
+        'x-gemini-model': model,
       }
     })
 

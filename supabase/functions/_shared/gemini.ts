@@ -10,10 +10,28 @@ export async function requireUser(request: Request) {
   return { client, user: data.user }
 }
 
-export async function callGemini(prompt: string, schema: Record<string, unknown>) {
-  const key = Deno.env.get('GEMINI_API_KEY')
-  if (!key) throw new Error('Chưa cấu hình GEMINI_API_KEY trong Supabase secrets.')
-  const model = Deno.env.get('GEMINI_MODEL') || 'gemini-3.5-flash-lite'
+export interface GeminiOptions {
+  apiKey?: string
+  model?: string
+}
+
+export function extractGeminiOptions(req: Request): GeminiOptions {
+  return {
+    apiKey: (req.headers.get('x-gemini-api-key') || '').trim(),
+    model: (req.headers.get('x-gemini-model') || '').trim() || undefined,
+  }
+}
+
+export async function callGemini(
+  prompt: string,
+  schema: Record<string, unknown>,
+  options?: GeminiOptions
+) {
+  const key = options?.apiKey?.trim()
+  if (!key) {
+    throw new Error('Bạn chưa cung cấp Gemini API Key. Vui lòng cấu hình API Key cá nhân trong phần Cài đặt.')
+  }
+  const model = options?.model?.trim() || 'gemini-3.5-flash-lite'
 
   // Convert schema format to standard JSON schema (lowercase types) to guide the model
   const schemaStr = JSON.stringify(schema).replace(/"(STRING|INTEGER|NUMBER|BOOLEAN|ARRAY|OBJECT|NULL)"/g, (match) => match.toLowerCase())
@@ -36,7 +54,6 @@ export async function callGemini(prompt: string, schema: Record<string, unknown>
         },
         { role: 'user', content: fullPrompt }
       ],
-      // Gemini 3.5 Flash-Lite supports up to 65,536 output tokens.
       // Keep this configurable while leaving enough headroom for structured JSON.
       max_tokens: Number(Deno.env.get('GEMINI_MAX_OUTPUT_TOKENS') || 16384),
       response_format: { type: 'json_object' }
@@ -44,7 +61,13 @@ export async function callGemini(prompt: string, schema: Record<string, unknown>
   })
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Gemini API HTTP ${response.status}: ${errorText}`)
+    if (response.status === 400 || response.status === 401 || response.status === 403) {
+      throw new Error(`Gemini API Key không hợp lệ hoặc không có quyền truy cập (Mã lỗi ${response.status}). Vui lòng kiểm tra lại trong Cài đặt.`)
+    }
+    if (response.status === 429) {
+      throw new Error(`Gemini API Key của bạn đã vượt quá hạn mức (Rate limit / Quota). Vui lòng thử lại sau, đổi sang model khác hoặc đổi API Key.`)
+    }
+    throw new Error(`Gemini API gặp lỗi (HTTP ${response.status}): ${errorText}`)
   }
   const payload = await response.json()
   const text = payload.choices?.[0]?.message?.content

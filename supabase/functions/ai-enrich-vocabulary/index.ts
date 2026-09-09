@@ -1,4 +1,4 @@
-import { callGemini, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
+import { callGemini, corsHeaders, extractGeminiOptions, json, requireUser } from '../_shared/gemini.ts'
 
 const schema = {
   type: 'OBJECT', properties: {
@@ -75,6 +75,7 @@ Deno.serve(async (request) => {
   try {
     const { client, user } = await requireUser(request)
     const { term, deckId, cambridgeData: clientCambridgeData } = await request.json()
+    const geminiOptions = extractGeminiOptions(request)
     if (typeof term !== 'string' || term.trim().length < 1) return json({ error: 'term là bắt buộc.' }, 400)
 
     // Fetch Cambridge và load user data song song để tiết kiệm thời gian
@@ -106,7 +107,7 @@ Deno.serve(async (request) => {
 
     const prompt = `Bạn là trợ lý học tiếng Anh cho người Việt trình độ A1-B1. Tạo bản nháp cho từ/cụm từ mới: "${term.trim()}".${cambridgeContext}\n\nYêu cầu:\n- Dùng IPA, partOfSpeech, CEFR từ Cambridge (ưu tiên tuyệt đối)\n- Nếu có Example sentence phía trên: exampleEn = câu đó, exampleVi = bản dịch tiếng Việt của ĐÚNG câu đó\n- NẾU KHÔNG CÓ example (hoặc từ Cambridge fetch thất bại): Hãy tạo ra một câu ví dụ tiếng Anh (exampleEn) CỰC KỲ CHUẨN MỰC, TỰ NHIÊN VÀ THỰC TẾ, bắt chước phong cách và chất lượng của từ điển Cambridge/Oxford để làm nổi bật rõ nghĩa của từ. KHÔNG CẦN giới hạn trong các từ đơn giản. Sau đó dịch sang tiếng Việt (exampleVi).\n- vietnamese: nghĩa tiếng Việt ngắn gọn, chuẩn xác\n- acceptedAnswers: chỉ biến thể chính tả/ngữ pháp thật sự tương đương\n- tier 1-3 (1=cơ bản, 3=nâng cao)\nTừ đã biết để tham khảo trình độ: ${JSON.stringify(known.map((word) => `${word.english}=${word.vietnamese}`))}` 
 
-    const draft = await callGemini(prompt, schema)
+    const draft = await callGemini(prompt, schema, geminiOptions)
 
     // Override cứng IPA từ Cambridge — đây là dữ liệu phonetics chính xác nhất
     const ipaFromCambridge = cambridgeData?.ipaUk ? `/${cambridgeData.ipaUk}/` : undefined

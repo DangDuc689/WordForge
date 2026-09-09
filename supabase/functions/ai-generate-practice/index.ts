@@ -1,4 +1,4 @@
-import { callGemini, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
+import { callGemini, corsHeaders, extractGeminiOptions, json, requireUser } from '../_shared/gemini.ts'
 
 const schema = {
   type: 'OBJECT', properties: {
@@ -12,6 +12,7 @@ Deno.serve(async (request) => {
   try {
     const { client, user } = await requireUser(request)
     const { deckId, format } = await request.json()
+    const geminiOptions = extractGeminiOptions(request)
     
     // 1. Fetch learned cards first
     const { data: cards, error: cardsError } = await client.from('srs_cards').select('vocabulary_id,due_at,lapses,reps,memory_level').eq('user_id', user.id)
@@ -80,7 +81,7 @@ Deno.serve(async (request) => {
       : 'Create a 120-200 word English passage, Vietnamese translation, and 3-4 reading-comprehension questions.'
     const prompt = `Create an A1-B1 English practice set as JSON. format=${requestedFormat}. ${formatInstructions} Use target words naturally; do not force vocabulary questions. Target words: ${JSON.stringify(targetGlossary.map(t => ({id: t.id, english: t.english, vietnamese: t.vietnamese})))}. Known words: ${JSON.stringify(known.map(k => k.english))}`
     
-    const result = await callGemini(prompt, schema)
+    const result = await callGemini(prompt, schema, geminiOptions)
     
     const validTargetIds = new Set(targetGlossary.map((t) => t.id))
     const questions = (Array.isArray(result.questions) ? result.questions : []).slice(0, requestedFormat === 'dialogue' ? 4 : 3).map((q: any) => {

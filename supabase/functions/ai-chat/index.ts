@@ -1,4 +1,4 @@
-import { callGemini, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
+import { callGemini, corsHeaders, extractGeminiOptions, json, requireUser } from '../_shared/gemini.ts'
 
 const chatSchema = {
   type: 'OBJECT',
@@ -43,6 +43,7 @@ Deno.serve(async (request) => {
     await requireUser(request)
     
     const payload = await request.json()
+    const geminiOptions = extractGeminiOptions(request)
     const action = payload.action || 'chat'
 
     if (action === 'chat') {
@@ -68,7 +69,7 @@ Deno.serve(async (request) => {
 
       conversationContext += "\nASSISTANT'S TURN:\nPlease generate the next response as the Assistant according to the SYSTEM INSTRUCTION. If the user makes a significant English grammar or vocabulary mistake in their latest message, include a correction object."
 
-      const result = await callGemini(conversationContext, chatSchema)
+      const result = await callGemini(conversationContext, chatSchema, geminiOptions)
       return json(result)
     } 
     else if (action === 'suggest') {
@@ -85,7 +86,7 @@ Suggest 3 natural, context-appropriate English sentences that the User could say
 Chat Transcript:
 ${transcript}`
 
-      const result = await callGemini(prompt, suggestSchema)
+      const result = await callGemini(prompt, suggestSchema, geminiOptions)
       return json(result)
     }
     else if (action === 'translate') {
@@ -94,7 +95,7 @@ ${transcript}`
         return json({ error: 'Thiếu text.' }, 400)
       }
       const prompt = `Dịch đoạn văn bản tiếng Anh sau sang tiếng Việt một cách tự nhiên, phù hợp với ngữ cảnh hội thoại:\n\n${text}`
-      const result = await callGemini(prompt, translateSchema)
+      const result = await callGemini(prompt, translateSchema, geminiOptions)
       return json(result)
     }
 

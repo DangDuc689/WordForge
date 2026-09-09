@@ -2250,6 +2250,125 @@ textarea {
   font-weight: 500;
 }
 
+/* ── AI Settings BYOK Controls ───────────────────────────── */
+.settings-ai-config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-top: 4px;
+}
+
+.settings-field-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-input-group {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.settings-input {
+  width: 100%;
+  padding: 10px 42px 10px 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.88rem;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.settings-input-action-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 8px;
+  height: 32px;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.settings-input-action-btn:hover {
+  color: var(--text);
+  background: var(--surface-hi);
+}
+
+.settings-ai-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-link-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--cyan);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.settings-link-btn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.settings-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.settings-callout.warning {
+  background: rgba(217, 119, 6, 0.1);
+  color: var(--amber);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.settings-callout.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--green);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.settings-callout.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
 /* ── Status feedback message ────────────────────────────── */
 .settings-status-msg {
   display: flex;

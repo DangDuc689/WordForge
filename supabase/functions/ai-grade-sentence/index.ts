@@ -1,4 +1,4 @@
-import { callGemini, corsHeaders, json, requireUser } from '../_shared/gemini.ts'
+import { callGemini, corsHeaders, extractGeminiOptions, json, requireUser } from '../_shared/gemini.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -6,6 +6,7 @@ Deno.serve(async (req) => {
   try {
     await requireUser(req)
     const { word, meaning, sentence } = await req.json()
+    const geminiOptions = extractGeminiOptions(req)
     if (!word || !sentence) throw new Error('Thiếu từ vựng hoặc câu cần chấm.')
 
     const prompt = `Bạn là một giáo viên tiếng Anh tận tâm. Học viên đang học từ vựng "${word}" (Nghĩa tiếng Việt: "${meaning}").
@@ -29,7 +30,7 @@ Yêu cầu trả về JSON có các trường:
       required: ["isCorrect", "feedback", "correctedSentence"]
     }
 
-    const result = await callGemini(prompt, schema)
+    const result = await callGemini(prompt, schema, geminiOptions)
     return json(result)
   } catch (err) {
     const error = err instanceof Error ? err.message : 'Lỗi nội bộ'

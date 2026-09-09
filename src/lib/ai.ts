@@ -3,6 +3,7 @@ import type { AiPracticeSet, AiVocabularyDraft } from '../domain/types'
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { fetchCambridgeLocal } from './cambridge'
+import { getAiConfig } from './aiSettings'
 
 const vocabularyDraftSchema = z.object({
   english: z.string().min(1),
@@ -46,7 +47,18 @@ const practiceSetSchema = z.object({
 
 async function invoke<T>(functionName: string, body: Record<string, unknown>, schema: z.ZodTypeAny): Promise<T> {
   if (!supabase) throw new Error('AI cần Supabase được cấu hình. Bạn vẫn có thể nhập và học thủ công.')
-  const { data, error } = await supabase.functions.invoke(functionName, { body })
+  const { apiKey, model } = getAiConfig()
+  if (!apiKey) {
+    throw new Error('Bạn chưa cài đặt Gemini API Key. Vui lòng vào Cài đặt để nhập API Key cá nhân của bạn.')
+  }
+
+  const { data, error } = await supabase.functions.invoke(functionName, {
+    body,
+    headers: {
+      'x-gemini-api-key': apiKey,
+      'x-gemini-model': model,
+    }
+  })
   if (error) {
     if (error instanceof FunctionsHttpError) {
       try {
