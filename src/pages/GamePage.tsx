@@ -323,7 +323,24 @@ export function GamePage() {
     {hud && <>
       <div className="game-hud left"><div><span>WAVE</span><b>{hud.wave}</b></div><div><span>SCORE</span><b>{hud.score.toLocaleString()}</b></div><div><span>XP</span><b>{hud.xp}</b></div><div className="hp-meter"><span>CORE {Math.ceil(hud.hp)}/{hud.maxHp}</span><i><b style={{ width: `${Math.max(0, hud.hp / hud.maxHp * 100)}%` }} /></i></div></div>
       <div className="game-hud right"><strong className={hud.multiplier > 1 ? 'active' : ''}>×{hud.multiplier}{hud.multiplier === 5 ? ' MAX' : ''}</strong></div>
-      {inputMode === 'touch' ? <div className="touch-target"><small>CHẠM QUÁI CÓ NGHĨA</small><b>{hud.targetEnglish || 'Chuẩn bị…'}</b></div> : <form className={`game-input ${isError ? 'shake-error' : ''}`} onSubmit={submit}><input ref={inputRef} value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e) } }} autoComplete="off" spellCheck={false} placeholder="gõ bản dịch rồi Enter" /><button type="submit" style={{ display: 'none' }} /></form>}
+      <div className="game-progress-bar">
+        <div className="game-progress-bar__info">
+          <span className="game-progress-bar__status">
+            <IconTarget size={13} />
+            <b>{hud.kills}</b> / {hud.totalWords} từ
+          </span>
+          <span className="game-progress-bar__remaining">
+            (còn <b>{Math.max(0, hud.totalWords - hud.kills)}</b> từ)
+          </span>
+        </div>
+        <div className="game-progress-bar__track">
+          <div
+            className="game-progress-bar__fill"
+            style={{ width: `${hud.totalWords > 0 ? Math.min(100, (hud.kills / hud.totalWords) * 100) : 0}%` }}
+          />
+        </div>
+      </div>
+      {inputMode === 'touch' ? <div className="touch-target"><small>CHẠM QUÁI CÓ NGHĨA</small><b>{hud.targetPrompt || 'Chuẩn bị…'}</b></div> : <form className={`game-input ${isError ? 'shake-error' : ''}`} onSubmit={submit}><input ref={inputRef} value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e) } }} autoComplete="off" spellCheck={false} placeholder="gõ bản dịch rồi Enter" /><button type="submit" style={{ display: 'none' }} /></form>}
     </>}
     <div className="game-controls">
       <button className="game-pause" onClick={() => engineRef.current?.togglePause()}>

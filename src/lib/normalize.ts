@@ -47,28 +47,38 @@ export function stripVietnameseDiacritics(value: string): string {
 export function isAcceptedVietnameseAnswer(
   submitted: string | undefined | null,
   canonical: string | undefined | null,
+  acceptedAnswers: (string | undefined | null)[] = [],
 ): boolean {
-  if (!submitted || !canonical) return false
+  if (!submitted) return false
   const s = normalizeAnswer(submitted)
+  if (!s) return false
   const sStripped = stripVietnameseDiacritics(s)
 
-  // Tách chuỗi canonical theo dấu , hoặc ;
-  const parts = canonical.split(/[,;]/).map((p) => p.trim()).filter(Boolean)
+  const targets = [canonical, ...(Array.isArray(acceptedAnswers) ? acceptedAnswers : [])].filter(Boolean) as string[]
+  if (targets.length === 0) return false
 
-  for (const part of parts) {
-    // Tạo biến thể gốc (có ngoặc) và biến thể bỏ ngoặc
-    const variants = [
-      part,
-      part.replace(/\s*\([^)]*\)/g, '').trim(),
-    ].filter(Boolean)
+  // Gom các biến thể hợp lệ (cả có ngoặc, đã bỏ ngoặc và các phần tách phẩy)
+  const candidates = new Set<string>()
+  for (const target of targets) {
+    const cleaned = target.replace(/\s*\([^)]*\)/g, '').trim()
+    candidates.add(target)
+    if (cleaned) candidates.add(cleaned)
 
-    for (const v of variants) {
-      const c = normalizeAnswer(v)
-      // Exact match (có dấu)
-      if (s === c) return true
-      // Match không dấu
-      if (sStripped === stripVietnameseDiacritics(c)) return true
+    for (const text of [target, cleaned]) {
+      for (const part of text.split(/[,;]/)) {
+        const trimmed = part.trim()
+        if (!trimmed) continue
+        candidates.add(trimmed)
+        const unparen = trimmed.replace(/\s*\([^)]*\)/g, '').trim()
+        if (unparen) candidates.add(unparen)
+      }
     }
+  }
+
+  for (const candidate of candidates) {
+    const c = normalizeAnswer(candidate)
+    if (!c) continue
+    if (s === c || sStripped === stripVietnameseDiacritics(c)) return true
   }
 
   return false

@@ -15,7 +15,8 @@ export interface GameSnapshot {
   correct: number
   wrong: number
   kills: number
-  targetEnglish: string
+  totalWords: number
+  targetPrompt: string
   slow: { owned: boolean; timer: number; cd: number; active: number }
   hint: { owned: boolean; timer: number; cd: number }
   buys: Record<ShopKey, number>
@@ -123,7 +124,8 @@ export class GameEngine {
     this.callbacks = callbacks
     this.state = {
       phase: 'playing', endReason: null, time: 0, wave: 1, score: 0, xp: 0, hp: 100, maxHp: 100,
-      combo: 0, multiplier: 1, correct: 0, wrong: 0, kills: 0, targetEnglish: '',
+      combo: 0, multiplier: 1, correct: 0, wrong: 0, kills: 0, totalWords: this.wordQueue.length,
+      targetPrompt: '',
       slow: { owned: false, timer: 0, cd: 15, active: 0 },
       hint: { owned: false, timer: 0, cd: 10 },
       buys: { hp: 0, regen: 0, slow: 0, hint: 0 }, missed: [],
@@ -169,12 +171,12 @@ export class GameEngine {
 
     const phase1Matches = this.monsters.filter((m) =>
       !m.dying && !m.killed && m.killPhase === 1 &&
-      isAcceptedAnswer(value, m.word.english, m.word.acceptedAnswers)
+      isAcceptedVietnameseAnswer(value, m.word.vietnamese, m.word.acceptedAnswers)
     )
 
     const phase2Matches = this.monsters.filter((m) =>
       !m.dying && !m.killed && m.killPhase === 2 &&
-      isAcceptedVietnameseAnswer(value, m.word.vietnamese)
+      isAcceptedAnswer(value, m.word.english, m.word.acceptedAnswers)
     )
 
     const allMatches = [...phase1Matches, ...phase2Matches]
@@ -381,14 +383,14 @@ export class GameEngine {
 
   private takeNextWord(): GameWord | undefined {
     if (this.inputMode !== 'touch') return this.wordQueue.shift()
-    const liveMeanings = new Set(this.liveMonsters().map((monster) => normalizeVietnamese(monster.word.vietnamese)))
-    const distinctIndex = this.wordQueue.findIndex((word) => !liveMeanings.has(normalizeVietnamese(word.vietnamese)))
+    const liveWords = new Set(this.liveMonsters().map((monster) => monster.word.english.toLowerCase()))
+    const distinctIndex = this.wordQueue.findIndex((word) => !liveWords.has(word.english.toLowerCase()))
     const index = distinctIndex >= 0 ? distinctIndex : 0
     return this.wordQueue.splice(index, 1)[0]
   }
 
   private estimateLabelWidth(word: GameWord, inputMode: 'typing' | 'touch', killPhase: 1 | 2): number {
-    let text = killPhase === 2 ? word.english : word.vietnamese
+    let text = killPhase === 2 ? word.vietnamese : word.english
     // Approximate additional text from hints
     if (inputMode === 'typing') text += '  →  X…'
     // 9px per char + 22px padding is the rough estimation used in render()
@@ -491,7 +493,7 @@ export class GameEngine {
   private liveMonsters() { return this.monsters.filter((monster) => !monster.killed && monster.dying === 0) }
   private distance(monster: Monster) { return Math.hypot(monster.x - this.centerX, monster.y - this.centerY) }
   private getTarget() { return this.liveMonsters().sort((a, b) => this.distance(a) - this.distance(b))[0] }
-  private updateTarget() { this.state.targetEnglish = this.inputMode === 'touch' ? this.getTarget()?.word.english ?? '' : '' }
+  private updateTarget() { this.state.targetPrompt = this.inputMode === 'touch' ? this.getTarget()?.word.vietnamese ?? '' : '' }
 
   private burst(x: number, y: number, color: string, count: number) {
     for (let index = 0; index < count; index++) { const angle = Math.random() * Math.PI * 2, speed = 60 + Math.random() * 180; this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .5 + Math.random() * .4, color, size: 2 + Math.random() * 3 }) }
@@ -606,14 +608,16 @@ export class GameEngine {
     ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(-7, -2, 3, 0, Math.PI * 2); ctx.arc(7, -2, 3, 0, Math.PI * 2); ctx.fill(); ctx.restore()
     let label: string
     if (monster.killPhase === 2) {
-      label = monster.word.english
+      label = monster.word.vietnamese
       if (monster.hintUntil > this.state.time && this.inputMode === 'typing') {
-        const firstMeaning = monster.word.vietnamese.split(/[,;]/)[0].trim().replace(/\s*\([^)]*\)/g, '').trim()
-        label += `  →  ${firstMeaning[0]}…`
+        label += `  →  ${monster.word.english[0]}…`
       }
     } else {
-      label = monster.word.vietnamese
-      if (monster.hintUntil > this.state.time && this.inputMode === 'typing') label += `  →  ${monster.word.english[0]}…`
+      label = monster.word.english
+      if (monster.hintUntil > this.state.time && this.inputMode === 'typing') {
+        const firstMeaning = monster.word.vietnamese.replace(/\s*\([^)]*\)/g, '').split(/[,;]/)[0].trim()
+        label += `  →  ${firstMeaning[0] || monster.word.vietnamese[0]}…`
+      }
     }
     ctx.font = `600 ${this.width < 520 ? 12 : 14}px "Be Vietnam Pro", sans-serif`; const width = ctx.measureText(label).width + 22
     const labelY = monster.y - monster.radius - 26; 

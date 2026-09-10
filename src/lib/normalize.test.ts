@@ -45,4 +45,17 @@ describe('Vietnamese answer normalization', () => {
     // Should NOT match the word inside parenthesis alone
     expect(isAcceptedVietnameseAnswer('khả thi', canonical)).toBe(false)
   })
+
+  it('accepts match when parentheses contain commas', () => {
+    const canonical = 'túi (áo, quần)'
+    expect(isAcceptedVietnameseAnswer('túi', canonical)).toBe(true)
+    expect(isAcceptedVietnameseAnswer('tui', canonical)).toBe(true)
+    expect(isAcceptedVietnameseAnswer('túi (áo, quần)', canonical)).toBe(true)
+  })
+
+  it('accepts additional acceptedAnswers in Vietnamese match', () => {
+    expect(isAcceptedVietnameseAnswer('tui', 'áo túi', ['túi'])).toBe(true)
+    expect(isAcceptedVietnameseAnswer('bao', 'túi', ['bao'])).toBe(true)
+    expect(isAcceptedVietnameseAnswer('sai', 'túi', ['bao'])).toBe(false)
+  })
 })
