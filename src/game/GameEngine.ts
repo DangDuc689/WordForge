@@ -1,5 +1,5 @@
 import type { GameOutcome, GameWord } from '../domain/types'
-import { isAcceptedAnswer, isAcceptedVietnameseAnswer, normalizeVietnamese } from '../lib/normalize'
+import { isAcceptedAnswer, isAcceptedVietnameseAnswer } from '../lib/normalize'
 
 export interface GameSnapshot {
   phase: 'playing' | 'paused' | 'shop' | 'over'
