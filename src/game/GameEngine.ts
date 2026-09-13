@@ -15,6 +15,7 @@ export interface GameSnapshot {
   correct: number
   wrong: number
   kills: number
+  breached: number
   totalWords: number
   targetPrompt: string
   slow: { owned: boolean; timer: number; cd: number; active: number }
@@ -56,6 +57,8 @@ const DAMAGE = { 1: 8, 2: 12, 3: 18 }
 const WORDS_PER_WAVE = 6
 const SPAWN_INTERVAL = 1
 const MONSTER_SPEED = 22
+/** Hệ số tốc độ theo cấp ghi nhớ SRS khi bật adaptive speed */
+const SRS_SPEED_FACTOR: Record<number, number> = { 1: 0.7, 2: 0.9 }
 
 export function buildWordQueue(words: GameWord[], random = Math.random, repetitions: 1 | 2 = 2) {
   const shuffle = (items: GameWord[]) => {
@@ -107,13 +110,15 @@ export class GameEngine {
   private dpr = 1
   private audioContext: AudioContext | null = null
   private destroyed = false
+  private adaptiveSpeed: boolean
 
   constructor(
     canvas: HTMLCanvasElement,
     words: GameWord[],
     inputMode: 'typing' | 'touch',
     callbacks: Callbacks,
-    repetitions: 1 | 2 = 2
+    repetitions: 1 | 2 = 2,
+    adaptiveSpeed = true
   ) {
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Canvas 2D không khả dụng')
@@ -122,9 +127,10 @@ export class GameEngine {
     this.wordQueue = buildWordQueue(words, Math.random, repetitions)
     this.inputMode = inputMode
     this.callbacks = callbacks
+    this.adaptiveSpeed = adaptiveSpeed
     this.state = {
       phase: 'playing', endReason: null, time: 0, wave: 1, score: 0, xp: 0, hp: 100, maxHp: 100,
-      combo: 0, multiplier: 1, correct: 0, wrong: 0, kills: 0, totalWords: this.wordQueue.length,
+      combo: 0, multiplier: 1, correct: 0, wrong: 0, kills: 0, breached: 0, totalWords: this.wordQueue.length,
       targetPrompt: '',
       slow: { owned: false, timer: 0, cd: 15, active: 0 },
       hint: { owned: false, timer: 0, cd: 10 },
@@ -394,7 +400,11 @@ export class GameEngine {
     // Approximate additional text from hints
     if (inputMode === 'typing') text += '  →  X…'
     // 9px per char + 22px padding is the rough estimation used in render()
-    return text.length * 9 + 22
+    let width = text.length * 9 + 22
+    if (this.adaptiveSpeed && word.memoryLevel >= 1 && word.memoryLevel <= 2) {
+      width += 22
+    }
+    return width
   }
 
   private labelsOverlap(x1: number, y1: number, w1: number, x2: number, y2: number, w2: number): boolean {
@@ -448,7 +458,8 @@ export class GameEngine {
       if (!overlapFound) break
     }
 
-    this.monsters.push({ id: crypto.randomUUID(), word, x: bestX, y: bestY, radius, speed: MONSTER_SPEED, spawnAt: this.state.time, hintUntil: 0, dying: 0, killed: false, seed: Math.random() * Math.PI * 2, killPhase: 1, freezeUntil: 0, knockbackVx: 0, knockbackVy: 0 })
+    const monsterSpeed = this.adaptiveSpeed ? MONSTER_SPEED * (SRS_SPEED_FACTOR[word.memoryLevel] ?? 1) : MONSTER_SPEED
+    this.monsters.push({ id: crypto.randomUUID(), word, x: bestX, y: bestY, radius, speed: monsterSpeed, spawnAt: this.state.time, hintUntil: 0, dying: 0, killed: false, seed: Math.random() * Math.PI * 2, killPhase: 1, freezeUntil: 0, knockbackVx: 0, knockbackVy: 0 })
   }
 
   private kill(monster: Monster, usedHint: boolean) {
@@ -470,9 +481,11 @@ export class GameEngine {
     monster.dying = -1
     this.shakeTimer = 0.45
     this.state.hp = Math.max(0, this.state.hp - DAMAGE[monster.word.tier]); this.state.combo = 0; this.state.multiplier = 1
+    this.state.breached += 1
     this.outcomes.push({ vocabularyId: monster.word.id, terminal: 'breached', responseMs: Math.round(Math.max(200, (this.state.time - monster.spawnAt) * 1000)), usedHint: monster.hintUntil > this.state.time, hadTargetMistake: this.targetMistakes.has(monster.word.id) })
     if (!this.state.missed.some((word) => word.id === monster.word.id)) this.state.missed.push(monster.word)
     this.beep(95, .18, 'sawtooth')
+    this.emit(true)
     if (this.state.hp <= 0) {
       this.finishGame('breached')
     }
@@ -619,7 +632,14 @@ export class GameEngine {
         label += `  →  ${firstMeaning[0] || monster.word.vietnamese[0]}…`
       }
     }
-    ctx.font = `600 ${this.width < 520 ? 12 : 14}px "Be Vietnam Pro", sans-serif`; const width = ctx.measureText(label).width + 22
+    ctx.font = `600 ${this.width < 520 ? 12 : 14}px "Be Vietnam Pro", sans-serif`
+    const hasBadge = this.adaptiveSpeed && monster.word.memoryLevel >= 1 && monster.word.memoryLevel <= 2
+    const badge = hasBadge ? (monster.word.memoryLevel === 1 ? '🐢' : '❄️') : ''
+    const labelWidth = ctx.measureText(label).width
+    const badgeGap = 6
+    const badgeWidth = hasBadge ? (this.width < 520 ? 14 : 16) : 0
+    const contentWidth = labelWidth + (hasBadge ? badgeGap + badgeWidth : 0)
+    const width = contentWidth + 22
     const labelY = monster.y - monster.radius - 26; 
     if (monster.killPhase === 2) {
       ctx.fillStyle = isDark ? 'rgba(7, 89, 133, 0.92)' : 'rgba(224, 242, 254, 0.95)'
@@ -627,7 +647,16 @@ export class GameEngine {
       ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255,255,255,0.95)'
     }
     this.roundRect(monster.x - width / 2, labelY - 15, width, 30, 8); ctx.fill()
-    ctx.strokeStyle = `${color}aa`; ctx.stroke(); ctx.fillStyle = isDark ? '#f8fafc' : '#0f172a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, monster.x, labelY)
+    ctx.strokeStyle = `${color}aa`; ctx.stroke()
+    const startX = monster.x - contentWidth / 2
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+    if (hasBadge) {
+      ctx.font = `${this.width < 520 ? 11 : 13}px sans-serif`
+      ctx.fillText(badge, startX, labelY)
+    }
+    ctx.font = `600 ${this.width < 520 ? 12 : 14}px "Be Vietnam Pro", sans-serif`
+    ctx.fillStyle = isDark ? '#f8fafc' : '#0f172a'
+    ctx.fillText(label, hasBadge ? startX + badgeWidth + badgeGap : startX, labelY)
   }
 
   private roundRect(x: number, y: number, width: number, height: number, radius: number) {

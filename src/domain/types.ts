@@ -208,6 +208,7 @@ export interface GameWord {
   category: PartOfSpeech
   tier: 1 | 2 | 3
   isDue: boolean
+  memoryLevel: number  // SRS memory level (0 = chưa học, 1–7 = cấp ghi nhớ)
 }
 
 export interface GameOutcome {

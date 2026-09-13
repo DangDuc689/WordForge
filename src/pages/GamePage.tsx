@@ -139,6 +139,14 @@ export function GamePage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const engineRef = useRef<GameEngine | null>(null)
   const [speedMultiplier, setSpeedMultiplier] = useState(1)
+  const [adaptiveSpeed, setAdaptiveSpeed] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return localStorage.getItem('wordforge_game_adaptive_speed') !== 'false'
+  })
+  const handleAdaptiveSpeedChange = (val: boolean) => {
+    setAdaptiveSpeed(val)
+    try { localStorage.setItem('wordforge_game_adaptive_speed', String(val)) } catch {}
+  }
   const speedRef = useRef(1)
   speedRef.current = speedMultiplier
   const recordGameRef = useRef(recordGame)
@@ -190,7 +198,7 @@ export function GamePage() {
             })
         }))
       },
-    }, repetitions)
+    }, repetitions, adaptiveSpeed)
     engineRef.current = engine
     engine.setSpeedMultiplier(speedRef.current)
     engine.start()
@@ -215,7 +223,7 @@ export function GamePage() {
     window.addEventListener('resize', resize); window.addEventListener('keydown', hotkeys)
     setTimeout(() => inputRef.current?.focus(), 0)
     return () => { engine.destroy(); engineRef.current = null; window.removeEventListener('resize', resize); window.removeEventListener('keydown', hotkeys) }
-  }, [deckId, inputMode, repetitions, running, source, selectedIds])
+  }, [deckId, inputMode, repetitions, running, source, selectedIds, adaptiveSpeed])
 
   useBlocker(() => {
     if (hud?.phase === 'over' && saveStatus !== 'saved') {
@@ -297,6 +305,13 @@ export function GamePage() {
         <label>Bộ từ<select value={deckId} onChange={(event) => setDeckId(event.target.value)}><option value="all">Tất cả bộ từ</option>{snapshot.decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label>
         <label>Nguồn từ<select value={source} onChange={(event) => setSource(event.target.value as GamePoolSource)}><option value="due">Từ đến hạn (ôn)</option><option value="learned">Từ đã học</option><option value="all">Toàn bộ active</option></select></label>
         <label>Số lần xuất hiện mỗi từ<select value={repetitions} onChange={(event) => handleRepetitionsChange(Number(event.target.value) as 1 | 2)}><option value={1}>1 lần · Ôn nhanh (đúng 1 lần là tăng cấp)</option><option value={2}>2 lần · Tiêu chuẩn (cần đúng 2 lần)</option></select></label>
+        <label className="game-toggle-row">
+          <span>
+            🛡️ Hỗ trợ tốc độ thích ứng
+            <small>Từ SRS Cấp 1 🐢 chậm 30%, Cấp 2 ❄️ chậm 10%. Giúp có thêm thời gian cho từ mới/yếu.</small>
+          </span>
+          <input type="checkbox" checked={adaptiveSpeed} onChange={(e) => handleAdaptiveSpeedChange(e.target.checked)} />
+        </label>
         <div className="game-readiness">
           <span><b>{pool.length}</b><small>từ trong trận</small></span>
           <span><b>{pool.length * repetitions}</b><small>lượt quái</small></span>
@@ -325,19 +340,33 @@ export function GamePage() {
       <div className="game-hud right"><strong className={hud.multiplier > 1 ? 'active' : ''}>×{hud.multiplier}{hud.multiplier === 5 ? ' MAX' : ''}</strong></div>
       <div className="game-progress-bar">
         <div className="game-progress-bar__info">
-          <span className="game-progress-bar__status">
+          <span className="game-progress-bar__status" title="Từ đã tiêu diệt">
             <IconTarget size={13} />
             <b>{hud.kills}</b> / {hud.totalWords} từ
           </span>
+          {(hud.breached ?? 0) > 0 && (
+            <span className="game-progress-bar__breached" title="Từ đã lọt qua">
+              <IconAlertCircle size={13} />
+              <b>{hud.breached}</b> lọt
+            </span>
+          )}
           <span className="game-progress-bar__remaining">
-            (còn <b>{Math.max(0, hud.totalWords - hud.kills)}</b> từ)
+            (còn <b>{Math.max(0, hud.totalWords - hud.kills - (hud.breached ?? 0))}</b> từ)
           </span>
         </div>
         <div className="game-progress-bar__track">
           <div
             className="game-progress-bar__fill"
             style={{ width: `${hud.totalWords > 0 ? Math.min(100, (hud.kills / hud.totalWords) * 100) : 0}%` }}
+            title={`Đã diệt: ${hud.kills}`}
           />
+          {(hud.breached ?? 0) > 0 && (
+            <div
+              className="game-progress-bar__breach-fill"
+              style={{ width: `${hud.totalWords > 0 ? Math.min(100 - (hud.kills / hud.totalWords) * 100, ((hud.breached ?? 0) / hud.totalWords) * 100) : 0}%` }}
+              title={`Đã lọt: ${hud.breached}`}
+            />
+          )}
         </div>
       </div>
       {inputMode === 'touch' ? <div className="touch-target"><small>CHẠM QUÁI CÓ NGHĨA</small><b>{hud.targetPrompt || 'Chuẩn bị…'}</b></div> : <form className={`game-input ${isError ? 'shake-error' : ''}`} onSubmit={submit}><input ref={inputRef} value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e) } }} autoComplete="off" spellCheck={false} placeholder="gõ bản dịch rồi Enter" /><button type="submit" style={{ display: 'none' }} /></form>}

@@ -50,6 +50,7 @@ export function buildGamePool(
         category: sense.partOfSpeech,
         tier: sense.tier,
         isDue: isDue(card, now),
+        memoryLevel: card?.memoryLevel ?? 0,
       }
     })
 }

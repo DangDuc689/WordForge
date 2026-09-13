@@ -286,18 +286,39 @@ export function NewStudyPage() {
     return deck === 'all' || vocab.deckId === deck
   }).length
 
+  const renderDeckSelect = () => (
+    <select 
+      className="deck-select"
+      aria-label="Chọn bộ từ vựng"
+      value={deck} 
+      disabled={busy || savingSession}
+      onChange={e => { void changeLearnDeck(e.target.value === 'all' ? null : e.target.value) }}
+    >
+      <option value="all">Tất cả bộ từ</option>
+      {snapshot.decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+    </select>
+  )
+
   if (!word) {
     const hasMoreToLearn = learnedCount < total
     return (
       <div className="page learn-page">
         <Stats total={total} learn={learnedCount} review={reviewCount} />
+
+        <div className="learn-toolbar learn-toolbar--empty">
+          <div className="learn-toolbar-deck">
+            <span className="deck-select-label">Bộ từ:</span>
+            {renderDeckSelect()}
+          </div>
+        </div>
+
         <section className="learn-empty panel">
           <div className="empty-check-icon">✓</div>
           {hasMoreToLearn ? (
             <>
               <h2>Hoàn thành lượt học!</h2>
               <p>Bạn đã xử lý toàn bộ từ mới trong lượt này.</p>
-              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
+              <div className="learn-empty-actions">
                 <button
                   className="button primary"
                   disabled={busy || savingSession}
@@ -312,8 +333,8 @@ export function NewStudyPage() {
             <>
               <h2>Đã hoàn thành!</h2>
               <p>Bạn đã học tất cả từ vựng trong bộ từ này.</p>
-              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem' }}>
-                <Link className="button primary" to="/study">Ôn tập từ vựng</Link>
+              <div className="learn-empty-actions">
+                <Link className="button primary" to="/review">Ôn tập từ vựng</Link>
                 <Link className="button ghost" to="/">Về tổng quan</Link>
               </div>
             </>
@@ -357,15 +378,7 @@ export function NewStudyPage() {
           })}
         </div>
 
-        <select 
-          className="deck-select"
-          value={deck} 
-          disabled={busy || savingSession}
-          onChange={e => { void changeLearnDeck(e.target.value === 'all' ? null : e.target.value) }}
-        >
-          <option value="all">Tất cả bộ từ</option>
-          {snapshot.decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
+        {renderDeckSelect()}
       </div>
 
       {tab === 'flashcard' && (
