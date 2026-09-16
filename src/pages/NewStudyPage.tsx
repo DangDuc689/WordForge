@@ -63,6 +63,7 @@ export function NewStudyPage() {
   const [isAiGrading, setIsAiGrading] = useState(false)
   const started = useRef(Date.now())
   const exampleInputRef = useRef<HTMLTextAreaElement>(null)
+  const lastCheckTimeRef = useRef<number>(0)
 
   useEffect(() => {
     if (tab === 'example') {
@@ -181,19 +182,38 @@ export function NewStudyPage() {
     }
   }
 
+  const handleRetryExample = () => {
+    setChecked(false)
+    setAiFeedback('')
+    setTimeout(() => {
+      if (exampleInputRef.current) {
+        exampleInputRef.current.focus()
+        const len = exampleInputRef.current.value.length
+        exampleInputRef.current.setSelectionRange(len, len)
+      }
+    }, 50)
+  }
+
   const checkExample = (e: FormEvent) => {
     e.preventDefault()
     if (word && answer.trim()) {
+      lastCheckTimeRef.current = Date.now()
       const cleanAnswer = answer.trim()
       const exampleText = word.exampleEn || `Is this ${word.english} in a different context?`
       
-      const normalize = (s: string) => s.replace(/[.,!?]/g, '').trim().toLowerCase()
-      const isExactMatch = normalize(cleanAnswer) === normalize(exampleText)
+      const normalizeSentence = (s: string) =>
+        s
+          .normalize('NFC')
+          .toLowerCase()
+          .trim()
+          .replace(/[.,!?;:"'“”‘’]/g, '')
+          .replace(/\s+/g, ' ')
+      const isExactMatch = normalizeSentence(cleanAnswer) === normalizeSentence(exampleText)
       
       if (!isExactMatch) {
         setCorrect(false)
         setChecked(true)
-        setAiFeedback('Bạn chưa nhập đúng nguyên văn câu mẫu. (Hoặc dùng "Đánh giá AI" nếu bạn tự đặt câu mới)')
+        setAiFeedback('')
         return
       }
 
@@ -207,6 +227,7 @@ export function NewStudyPage() {
     e.preventDefault()
     if (!word || !answer.trim() || busy || savingSession || isAiGrading) return
     
+    lastCheckTimeRef.current = Date.now()
     setIsAiGrading(true)
     setAiFeedback('')
     
@@ -261,13 +282,19 @@ export function NewStudyPage() {
         }
       } else if (tab === 'example') {
         if (e.key === 'Enter') {
+          if (isInput) return
           if (!checked && answer.trim()) {
             e.preventDefault()
             checkExample({ preventDefault: () => {} } as FormEvent)
           } else if (checked) {
             e.preventDefault()
-            if (correct) void nextWord(true)
-            else { setChecked(false); setAnswer(''); setAiFeedback(''); }
+            if (correct) {
+              void nextWord(true)
+            } else {
+              if (Date.now() - lastCheckTimeRef.current > 400) {
+                handleRetryExample()
+              }
+            }
           }
         }
       }
@@ -570,18 +597,31 @@ export function NewStudyPage() {
           <form onSubmit={checkExample}>
             <textarea 
               ref={exampleInputRef}
-              style={checked && !correct ? { borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.05)' } : undefined}
+              className={checked && !correct ? 'is-error' : ''}
               autoFocus
               value={answer} 
-              onChange={e => setAnswer(e.target.value)} 
+              onChange={e => {
+                if (checked) {
+                  setChecked(false)
+                  setAiFeedback('')
+                }
+                setAnswer(e.target.value)
+              }} 
               onKeyDown={e => {
                 if (e.key === 'Enter') {
+                  if (e.shiftKey) return
                   e.preventDefault()
+                  e.stopPropagation()
                   if (!checked && answer.trim()) {
                     checkExample({ preventDefault: () => {} } as FormEvent)
                   } else if (checked) {
-                    if (correct) void nextWord(true)
-                    else { setChecked(false); setAnswer(''); }
+                    if (correct) {
+                      void nextWord(true)
+                    } else {
+                      if (Date.now() - lastCheckTimeRef.current > 400) {
+                        handleRetryExample()
+                      }
+                    }
                   }
                 }
               }}
@@ -590,14 +630,14 @@ export function NewStudyPage() {
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
-              disabled={checked || busy || savingSession}
+              disabled={(checked && correct) || busy || savingSession || isAiGrading}
             />
             
             <div className="example-actions">
-              <button type="button" className="ai-grade" disabled={!answer.trim() || checked || busy || savingSession || isAiGrading} onClick={handleAiGrade}>
+              <button type="button" className="ai-grade" disabled={!answer.trim() || (checked && correct) || busy || savingSession || isAiGrading} onClick={handleAiGrade}>
                 {isAiGrading ? 'Đang chấm...' : 'Đánh giá AI'}
               </button>
-              <button className="learn-check" disabled={!answer.trim() || checked || busy || savingSession || isAiGrading}>
+              <button className="learn-check" disabled={!answer.trim() || (checked && correct) || busy || savingSession || isAiGrading}>
                 Kiểm tra câu
               </button>
             </div>
@@ -605,11 +645,8 @@ export function NewStudyPage() {
 
           {checked && (
             <div className={`learn-feedback ${correct ? 'ok' : 'bad'}`}>
-              <div className="feedback-content" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
-                <span>{correct ? 'Hoàn thành từ vựng này!' : 'Chưa đạt yêu cầu.'}</span>
-                {aiFeedback && <p className="ai-feedback-text" style={{ fontSize: '0.9rem', opacity: 0.9, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{aiFeedback}</p>}
-              </div>
-              <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : (setChecked(false), setAnswer(''), setAiFeedback(''))}>
+              <span>{correct ? 'Hoàn thành từ vựng này!' : (aiFeedback || 'Chưa đúng câu mẫu (hoặc bấm "Đánh giá AI").')}</span>
+              <button disabled={busy || savingSession} onClick={() => correct ? void nextWord(true) : handleRetryExample()}>
                 {correct ? 'Hoàn thành →' : 'Thử lại'}
               </button>
             </div>

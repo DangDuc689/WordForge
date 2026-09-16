@@ -4633,6 +4633,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .learn-feedback.ok {
@@ -4655,6 +4656,7 @@ kbd {
   font-weight: 800;
   background: transparent;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .learn-feedback button:hover {
@@ -4792,6 +4794,21 @@ kbd {
 .example-learn textarea:focus {
   border-color: var(--cyan);
 }
+
+.example-learn textarea.is-error {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  box-shadow: 0 0 0 3.5px rgba(239, 68, 68, 0.35), 0 4px 16px rgba(239, 68, 68, 0.2) !important;
+  animation: errorShake 0.4s ease-in-out;
+}
+
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+
 
 .example-actions {
   display: grid;

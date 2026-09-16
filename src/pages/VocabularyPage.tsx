@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, useDeferredValue, type FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { OxfordImportModal } from '../components/OxfordImportModal'
 import { VocabularyForm } from '../components/VocabularyForm'
@@ -24,6 +24,7 @@ export function VocabularyPage() {
   const { snapshot, prioritizeLearnWord, deleteWord, saveDeck, deleteDeck } = useApp()
   const { speak: speakTts, isLoading: isTtsLoading } = useTts(snapshot.profile.ttsVoice)
   const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   const [deckFilter, setDeckFilter] = useState('all')
   const [partFilter, setPartFilter] = useState<PartOfSpeech | 'all' | 'priority'>('all')
 
@@ -41,19 +42,19 @@ export function VocabularyPage() {
 
   const cardsByWord = useMemo(() => new Map(snapshot.cards.map((card) => [card.vocabularyId, card])), [snapshot.cards])
   const filtered = useMemo(() => snapshot.vocabulary.filter((word) => {
-    const needle = query.toLocaleLowerCase('vi')
+    const needle = deferredQuery.toLocaleLowerCase('vi')
     return (deckFilter === 'all' || word.deckId === deckFilter)
       && (partFilter === 'all' ? true : partFilter === 'priority' ? word.isPrioritized === true : senseParts(word).includes(partFilter))
       && (progressFilter === 'all' || (progressFilter === 'new' ? !cardsByWord.has(word.id) : progressFilter === 'learned' ? cardsByWord.has(word.id) : Boolean(cardsByWord.get(word.id) && cardsByWord.get(word.id)!.reps > 0)))
       && (!needle || word.english.toLowerCase().includes(needle) || senseMeanings(word).some((meaning) => meaning.toLocaleLowerCase('vi').includes(needle)))
-  }), [cardsByWord, deckFilter, partFilter, progressFilter, query, snapshot.vocabulary])
+  }), [cardsByWord, deckFilter, partFilter, progressFilter, deferredQuery, snapshot.vocabulary])
   
   const pageSize = viewMode === 'table' ? 100 : 24
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
-  const visibleWords = filtered.slice((page - 1) * pageSize, page * pageSize)
+  const safePage = Math.min(page, pageCount)
+  const visibleWords = filtered.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   useEffect(() => { setPage(1) }, [deckFilter, partFilter, progressFilter, query, viewMode])
-  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   // Keyboard shortcut handlers
   useEffect(() => {
@@ -134,7 +135,12 @@ export function VocabularyPage() {
                 <button
                   disabled={snapshot.decks.length <= 1}
                   className="icon-button mini"
-                  onClick={() => window.confirm(`Xóa bộ “${deck.name}” và mọi từ bên trong?`) && void deleteDeck(deck.id)}
+                  onClick={() => {
+                    if (window.confirm(`Xóa bộ “${deck.name}” và mọi từ bên trong?`)) {
+                      void deleteDeck(deck.id)
+                      if (deckFilter === deck.id) setDeckFilter('all')
+                    }
+                  }}
                   aria-label={`Xóa bộ ${deck.name}`}
                 >
                   <CloseIcon width="12" height="12" />
@@ -407,14 +413,14 @@ export function VocabularyPage() {
       {/* Pagination Bar */}
       {filtered.length > 0 && (
         <div className="table-pagination panel">
-          <span>Hiển thị {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} / {filtered.length} mục từ</span>
+          <span>Hiển thị {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} / {filtered.length} mục từ</span>
           <div className="pagination-controls">
-            <button className="button ghost mini" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+            <button className="button ghost mini" disabled={safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))}>
               <ChevronLeftIcon width="14" height="14" />
               <span>Trước</span>
             </button>
-            <span className="page-number"><b>{page}</b> / {pageCount}</span>
-            <button className="button ghost mini" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>
+            <span className="page-number"><b>{safePage}</b> / {pageCount}</span>
+            <button className="button ghost mini" disabled={safePage >= pageCount} onClick={() => setPage(Math.min(pageCount, safePage + 1))}>
               <span>Sau</span>
               <ChevronRightIcon width="14" height="14" />
             </button>
