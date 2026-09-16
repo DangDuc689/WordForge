@@ -24,7 +24,7 @@ export function VocabularyPage() {
   const { snapshot, prioritizeLearnWord, deleteWord, saveDeck, deleteDeck } = useApp()
   const { speak: speakTts, isLoading: isTtsLoading } = useTts(snapshot.profile.ttsVoice)
   const [query, setQuery] = useState('')
-  const [deckFilter, setDeckFilter] = useState(snapshot.decks[0]?.id ?? 'all')
+  const [deckFilter, setDeckFilter] = useState('all')
   const [partFilter, setPartFilter] = useState<PartOfSpeech | 'all' | 'priority'>('all')
 
   const [progressFilter, setProgressFilter] = useState<'all' | 'new' | 'learned' | 'review'>('all')
