@@ -5,6 +5,7 @@ import { GameEngine, type GameSnapshot, type ShopKey } from '../game/GameEngine'
 import { buildGamePool } from '../game/sessionPool'
 import type { GameSaveRequest, GamePoolSource } from '../domain/types'
 import { useSearchParams, useBlocker } from 'react-router-dom'
+import { isAcceptedAnswer } from '../lib/normalize'
 
 const IconArrowRight = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: 'inline-block', verticalAlign: '-2px' }}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -133,12 +134,31 @@ export function GamePage() {
   const [saveError, setSaveError] = useState('')
   const [saveRequest, setSaveRequest] = useState<GameSaveRequest | null>(null)
   const [drillIndex, setDrillIndex] = useState<number | null>(null)
-  const [flipped, setFlipped] = useState(false)
+  const [drillAnswer, setDrillAnswer] = useState('')
+  const [drillChecked, setDrillChecked] = useState(false)
+  const [drillCorrect, setDrillCorrect] = useState(false)
+  const [drillScore, setDrillScore] = useState(0)
+  const [drillDone, setDrillDone] = useState(false)
   const [isError, setIsError] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const engineRef = useRef<GameEngine | null>(null)
-  const [speedMultiplier, setSpeedMultiplier] = useState(1)
+  const [speedMultiplier, setSpeedMultiplier] = useState(() => {
+    if (typeof window === 'undefined') return 1
+    try {
+      const stored = localStorage.getItem('wordforge_game_speed')
+      if (stored) {
+        const val = Number(stored)
+        if (!Number.isNaN(val) && val >= 0.5 && val <= 3) return val
+      }
+    } catch {}
+    return 1
+  })
+  const handleSpeedMultiplierChange = (val: number) => {
+    setSpeedMultiplier(val)
+    engineRef.current?.setSpeedMultiplier(val)
+    try { localStorage.setItem('wordforge_game_speed', String(val)) } catch {}
+  }
   const [adaptiveSpeed, setAdaptiveSpeed] = useState(() => {
     if (typeof window === 'undefined') return true
     return localStorage.getItem('wordforge_game_adaptive_speed') !== 'false'
@@ -273,6 +293,40 @@ export function GamePage() {
     setAnswer('')
   }
 
+  const resetDrill = () => {
+    setDrillAnswer('')
+    setDrillChecked(false)
+    setDrillCorrect(false)
+  }
+
+  const handleDrillSubmit = (e?: FormEvent) => {
+    if (e) e.preventDefault()
+    const currentDrillIndex = drillIndex ?? 0
+    const drillWord = hud?.missed[currentDrillIndex]
+    if (!drillWord || !drillAnswer.trim()) return
+    const isOk = isAcceptedAnswer(drillAnswer, drillWord.english, drillWord.acceptedAnswers ?? [])
+    setDrillCorrect(isOk)
+    setDrillChecked(true)
+    if (isOk) setDrillScore((s) => s + 1)
+  }
+
+  const handleDrillNext = () => {
+    if (!hud) return
+    const currentDrillIndex = drillIndex ?? 0
+    if (currentDrillIndex < hud.missed.length - 1) {
+      setDrillIndex(currentDrillIndex + 1)
+      resetDrill()
+    } else {
+      setDrillIndex(null)
+      setDrillDone(true)
+    }
+  }
+
+  const handleDrillReveal = () => {
+    setDrillCorrect(false)
+    setDrillChecked(true)
+  }
+
   const stop = () => {
     if (hud && hud.phase === 'over' && saveStatus === 'failed') {
       if (!window.confirm('Dữ liệu chưa được lưu. Nếu rời đi bạn sẽ không thể thử lưu lại và kết quả sẽ bị hủy. Bạn có chắc chắn muốn thoát?')) {
@@ -287,6 +341,9 @@ export function GamePage() {
     setRunning(false)
     setHud(null)
     setDrillIndex(null)
+    setDrillDone(false)
+    setDrillScore(0)
+    resetDrill()
   }
   const accuracy = hud ? (hud.correct + hud.wrong ? Math.round(hud.correct / (hud.correct + hud.wrong) * 100) : 100) : 100
 
@@ -327,9 +384,152 @@ export function GamePage() {
     const currentDrillIndex = drillIndex ?? 0
     const drillWord = drillIndex === null ? null : hud.missed[currentDrillIndex]
     return <div className="game-screen game-results-screen">
-      {drillWord
-        ? <section className="game-result-card drill-card"><span className="eyebrow">Remedial drill · {currentDrillIndex + 1}/{hud.missed.length}</span><div className="flashcard" onClick={() => setFlipped(true)}><small>{drillWord.category} · tier {drillWord.tier}</small><h2>{drillWord.vietnamese}</h2>{flipped ? <b>{drillWord.english}</b> : <em>Chạm để lật</em>}</div><button className="button primary" onClick={() => { if (!flipped) setFlipped(true); else if (currentDrillIndex < hud.missed.length - 1) { setDrillIndex(currentDrillIndex + 1); setFlipped(false) } else setDrillIndex(null) }}>{!flipped ? 'Hiện đáp án' : currentDrillIndex < hud.missed.length - 1 ? <><span>Từ tiếp theo</span> <IconArrowRight /></> : 'Hoàn thành'}</button></section>
-        : <GameResultPanel hud={hud} accuracy={accuracy} saveStatus={saveStatus} saveError={saveError} onDrill={() => { setDrillIndex(0); setFlipped(false) }} onStop={stop} onRetrySave={handleRetrySave} />}
+      {drillWord ? (
+        !drillChecked ? (
+          <section className="game-result-card drill-card">
+            <span className="eyebrow">Ôn lại từ lọt · {currentDrillIndex + 1}/{hud.missed.length}</span>
+            <div className="drill-prompt-box">
+              <small>{drillWord.category} · tier {drillWord.tier}</small>
+              <h2>{drillWord.vietnamese}</h2>
+              <p>Gõ từ tiếng Anh tương ứng rồi nhấn Enter</p>
+            </div>
+            <form onSubmit={handleDrillSubmit} className="drill-form">
+              <input
+                autoFocus
+                type="text"
+                value={drillAnswer}
+                onChange={(e) => setDrillAnswer(e.target.value)}
+                placeholder="Nhập từ tiếng Anh…"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <div className="button-row" style={{ justifyContent: 'center' }}>
+                <button type="submit" className="button primary" disabled={!drillAnswer.trim()}>
+                  <span>Kiểm tra</span> <IconArrowRight />
+                </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  onClick={handleDrillReveal}
+                >
+                  Xem đáp án
+                </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  onClick={() => {
+                    setDrillIndex(null)
+                    setDrillDone(false)
+                    resetDrill()
+                  }}
+                >
+                  Dừng drill
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : (
+          <section className="game-result-card drill-card">
+            <span className="eyebrow">Ôn lại từ lọt · {currentDrillIndex + 1}/{hud.missed.length}</span>
+            <div className={`drill-result-card ${drillCorrect ? 'correct' : 'wrong'}`}>
+              <small>{drillWord.category} · tier {drillWord.tier}</small>
+              <h2>{drillWord.vietnamese}</h2>
+              <div className="drill-feedback-detail">
+                {drillCorrect ? (
+                  <p className="drill-status correct-text">
+                    <IconCheck size={18} /> <b>Chính xác!</b>
+                  </p>
+                ) : (
+                  <p className="drill-status wrong-text">
+                    <IconAlertCircle size={18} /> <b>Chưa đúng</b>
+                    {drillAnswer.trim() && (
+                      <span className="drill-user-answer">(Bạn đã nhập: <em>{drillAnswer.trim()}</em>)</span>
+                    )}
+                  </p>
+                )}
+                <div className="drill-target-word">
+                  <span>Đáp án đúng:</span>
+                  <b>{drillWord.english}</b>
+                </div>
+              </div>
+            </div>
+            <div className="button-row" style={{ justifyContent: 'center' }}>
+              <button
+                autoFocus
+                className="button primary"
+                onClick={handleDrillNext}
+              >
+                {currentDrillIndex < hud.missed.length - 1 ? (
+                  <><span>Từ tiếp theo</span> <IconArrowRight /></>
+                ) : (
+                  <><span>Xem tổng kết drill</span> <IconArrowRight /></>
+                )}
+              </button>
+              <button
+                type="button"
+                className="button ghost"
+                onClick={() => {
+                  setDrillIndex(null)
+                  setDrillDone(false)
+                  resetDrill()
+                }}
+              >
+                Dừng drill
+              </button>
+            </div>
+          </section>
+        )
+      ) : drillDone ? (
+        <section className="game-result-card drill-card">
+          <span className="eyebrow">Hoàn thành ôn tập</span>
+          <h2>Tổng kết <em className="accent">drill từ lọt</em></h2>
+          <div className="end-stats" style={{ gridTemplateColumns: 'repeat(2, 1fr)', margin: '24px 0' }}>
+            <span><IconCheck /><b>{drillScore}</b><small>Đúng lần đầu</small></span>
+            <span><IconTarget /><b>{hud.missed.length ? Math.round((drillScore / hud.missed.length) * 100) : 100}%</b><small>Độ chính xác</small></span>
+          </div>
+          <p style={{ textAlign: 'center', margin: '16px 0 24px', fontSize: '0.95rem', color: 'var(--muted)' }}>
+            {drillScore === hud.missed.length
+              ? '🎉 Tuyệt vời! Bạn đã gõ chính xác toàn bộ các từ vừa bị lọt.'
+              : `Bạn đã ôn lại và gõ đúng ${drillScore}/${hud.missed.length} từ vừa bị quái lọt qua.`}
+          </p>
+          <div className="button-row" style={{ justifyContent: 'center' }}>
+            <button
+              className="button primary"
+              onClick={() => {
+                setDrillIndex(0)
+                setDrillDone(false)
+                setDrillScore(0)
+                resetDrill()
+              }}
+            >
+              <IconRefresh /> <span>Drill lại lượt nữa</span>
+            </button>
+            <button
+              className="button ghost"
+              onClick={() => {
+                setDrillDone(false)
+              }}
+            >
+              Về kết quả trận đấu
+            </button>
+          </div>
+        </section>
+      ) : (
+        <GameResultPanel
+          hud={hud}
+          accuracy={accuracy}
+          saveStatus={saveStatus}
+          saveError={saveError}
+          onDrill={() => {
+            setDrillIndex(0)
+            setDrillDone(false)
+            setDrillScore(0)
+            resetDrill()
+          }}
+          onStop={stop}
+          onRetrySave={handleRetrySave}
+        />
+      )}
     </div>
   }
 
@@ -376,19 +576,17 @@ export function GamePage() {
         {hud?.phase === 'paused' ? <><IconPlay />Tiếp tục</> : <><IconPause />Tạm dừng</>}
       </button>
       <div className="game-speed-control">
-        <span><IconZap />Tốc độ: <strong>×{speedMultiplier}</strong></span>
+        <span><IconZap />Tốc độ: <strong>×{Number(speedMultiplier.toFixed(2))}</strong></span>
         <input
           type="range"
-          min="1"
+          min="0.5"
           max="3"
-          step="1"
+          step="0.25"
           value={speedMultiplier}
           onChange={(event) => {
-            const val = Number(event.target.value)
-            setSpeedMultiplier(val)
-            engineRef.current?.setSpeedMultiplier(val)
+            handleSpeedMultiplierChange(Number(event.target.value))
           }}
-          title={`Tốc độ di chuyển của quái ×${speedMultiplier}`}
+          title={`Tốc độ di chuyển của quái ×${Number(speedMultiplier.toFixed(2))}`}
         />
       </div>
       <button className="game-exit" onClick={stop}><IconLogOut />Thoát</button>

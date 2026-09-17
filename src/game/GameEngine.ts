@@ -284,7 +284,7 @@ export class GameEngine {
   }
 
   setSpeedMultiplier(multiplier: number) {
-    this.speedMultiplier = Math.max(1, Math.min(3, multiplier))
+    this.speedMultiplier = Math.max(0.5, Math.min(3, multiplier))
   }
 
   private loop = (now: number) => {
@@ -351,7 +351,7 @@ export class GameEngine {
         monster.y = Math.max(monster.radius, Math.min(this.height - monster.radius, monster.y))
       }
 
-      if (this.distance(monster) < 42 + monster.radius) this.breach(monster)
+      if (this.distance(monster) < 30 + monster.radius) this.breach(monster)
     }
     this.monsters = this.monsters.filter((monster) => monster.dying !== -1 && !(monster.killed && monster.dying <= 0))
     for (const particle of this.particles) { particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.vx *= .95; particle.vy *= .95; particle.life -= dt }
@@ -426,7 +426,7 @@ export class GameEngine {
     const word = this.takeNextWord()
     if (!word) return
     
-    const radius = word.category === 'phrase' ? 30 : 24
+    const radius = word.category === 'phrase' ? 22 : 17
     const spawnRadius = Math.max(this.centerX, this.centerY, this.height - this.centerY) + 60
     const angleMin = Math.PI + Math.PI / 6   // 210°
     const angleMax = 2 * Math.PI - Math.PI / 6  // 330°
@@ -573,7 +573,7 @@ export class GameEngine {
     const isLowHp = hpRatio <= 0.35
     const pulseSpeed = isLowHp ? 6 : 2.4
     const pulse = 1 + Math.sin(this.state.time * pulseSpeed) * (isLowHp ? 0.12 : 0.05)
-    const radius = 34 * pulse
+    const radius = 24 * pulse
 
     // Low HP Danger Pulse Aura
     if (isLowHp) {
@@ -598,7 +598,7 @@ export class GameEngine {
     ctx.beginPath()
     for (let index = 0; index < 8; index++) { const angle = index / 8 * Math.PI * 2 - Math.PI / 2, x = this.centerX + Math.cos(angle) * radius, y = this.centerY + Math.sin(angle) * radius; index ? ctx.lineTo(x, y) : ctx.moveTo(x, y) }
     ctx.closePath(); ctx.fill(); ctx.stroke()
-    ctx.fillStyle = this.isDarkTheme ? '#f8fafc' : '#ffffff'; ctx.beginPath(); ctx.arc(this.centerX, this.centerY, 9, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = this.isDarkTheme ? '#f8fafc' : '#ffffff'; ctx.beginPath(); ctx.arc(this.centerX, this.centerY, 6.5, 0, Math.PI * 2); ctx.fill()
   }
 
   private drawMonster(monster: Monster) {

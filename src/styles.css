@@ -3477,6 +3477,182 @@ textarea {
   font-weight: 500;
 }
 
+/* Remedial Drill Quiz in Game */
+.drill-card {
+  max-width: 580px;
+  width: 100%;
+}
+
+.drill-prompt-box {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0 24px;
+  padding: 24px 20px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% 0, #eff6ff 0%, var(--surface) 80%);
+  box-shadow: 0 10px 25px rgba(148, 163, 184, 0.08);
+  text-align: center;
+}
+
+:root[data-theme="dark"] .drill-prompt-box,
+.dark .drill-prompt-box {
+  border-color: rgba(51, 65, 85, 0.8);
+  background: radial-gradient(circle at 50% 0, rgba(37, 99, 235, 0.15) 0%, var(--surface) 80%);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.drill-prompt-box small {
+  color: var(--cyan);
+  font: 700 0.75rem 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.drill-prompt-box h2 {
+  margin: 4px 0;
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.drill-prompt-box p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.drill-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.drill-form input {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.2s var(--ease);
+}
+
+.drill-form input:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+.drill-result-card {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0 24px;
+  padding: 24px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+.drill-result-card small {
+  color: var(--cyan);
+  font: 700 0.75rem 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.drill-result-card h2 {
+  margin: 4px 0;
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.drill-result-card.correct {
+  background: rgba(5, 150, 105, 0.08);
+  border-color: rgba(5, 150, 105, 0.3);
+}
+
+.drill-result-card.wrong {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+:root[data-theme="dark"] .drill-result-card.correct,
+.dark .drill-result-card.correct {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+:root[data-theme="dark"] .drill-result-card.wrong,
+.dark .drill-result-card.wrong {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.drill-feedback-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.drill-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.drill-status.correct-text {
+  color: var(--green);
+}
+
+.drill-status.wrong-text {
+  color: var(--danger);
+}
+
+.drill-user-answer {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: normal;
+  margin-left: 6px;
+}
+
+.drill-target-word {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
+.drill-target-word span {
+  color: var(--muted);
+}
+
+.drill-target-word b {
+  color: var(--cyan);
+  font: 700 1.4rem 'JetBrains Mono', monospace;
+}
+
 /* Auth / Login Page styling */
 .login-page {
   min-height: 100vh;
