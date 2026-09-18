@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext'
 import { GameEngine, type GameSnapshot, type ShopKey } from '../game/GameEngine'
 import { buildGamePool } from '../game/sessionPool'
 import type { GameSaveRequest, GamePoolSource } from '../domain/types'
-import { useSearchParams, useBlocker } from 'react-router-dom'
+import { useSearchParams, useBlocker, useNavigate } from 'react-router-dom'
 import { isAcceptedAnswer } from '../lib/normalize'
 
 const IconArrowRight = ({ size = 16 }: { size?: number }) => (
@@ -77,16 +77,20 @@ function GameResultPanel({
   accuracy,
   saveStatus,
   saveError,
+  source,
   onDrill,
   onStop,
+  onGoToReview,
   onRetrySave,
 }: {
   hud: GameSnapshot
   accuracy: number
   saveStatus: 'idle' | 'saving' | 'saved' | 'failed'
   saveError: string
+  source?: GamePoolSource
   onDrill: () => void
   onStop: () => void
+  onGoToReview?: () => void
   onRetrySave: () => void
 }) {
   const isSaving = saveStatus === 'saving'
@@ -101,7 +105,11 @@ function GameResultPanel({
     </div>
     <h3>Từ đã lọt qua <small>{hud.missed.length}</small></h3>
     <div className="missed-words">{hud.missed.map((word) => <span key={word.id}><b>{word.vietnamese}</b><em>{word.english}</em></span>)}</div>
-    <div className="button-row">{hud.missed.length > 0 && <button className="button primary" onClick={onDrill} disabled={isSaving}><span>Drill từ đã sai</span> <IconArrowRight /></button>}<button className="button ghost" onClick={onStop} disabled={isSaving}>Về màn chuẩn bị</button></div>
+    <div className="button-row">
+      {hud.missed.length > 0 && <button className="button primary" onClick={onDrill} disabled={isSaving}><span>Drill từ đã sai</span> <IconArrowRight /></button>}
+      {source === 'due' && <button className="button secondary" onClick={onGoToReview} disabled={isSaving}>Về trang Ôn tập</button>}
+      <button className="button ghost" onClick={onStop} disabled={isSaving}>Về màn chuẩn bị</button>
+    </div>
     {saveStatus === 'failed' && <div className="button-row" style={{ marginTop: '12px' }}><button className="button secondary" onClick={onRetrySave}>Thử lưu lại</button></div>}
     <small>{saveStatus === 'failed' ? <span className="danger-text"><IconAlertCircle /> Lỗi: {saveError} (Không cần chơi lại)</span> : saveStatus === 'saved' ? <><IconCheck /> Lịch học và game run đã được lưu</> : 'Đang lưu kết quả…'}</small>
   </section>
@@ -109,6 +117,7 @@ function GameResultPanel({
 
 export function GamePage() {
   const { snapshot, recordGame } = useApp()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [deckId, setDeckId] = useState(searchParams.get('deck') ?? snapshot.decks[0]?.id ?? 'all')
   const [source, setSource] = useState<GamePoolSource>(searchParams.get('source') === 'due' ? 'due' : searchParams.get('source') === 'learned' ? 'learned' : 'all')
@@ -173,11 +182,6 @@ export function GamePage() {
   recordGameRef.current = recordGame
   const pool = useMemo(() => buildGamePool(snapshot.vocabulary, snapshot.cards, deckId, new Date(), { source, selectedIds: source === 'due' ? selectedIds : undefined, limit: source === 'due' && selectedIds.length > 0 ? selectedIds.length : undefined }), [deckId, selectedIds, snapshot.cards, snapshot.vocabulary, source])
   const inputMode: 'typing' | 'touch' = typeof window !== 'undefined' && (matchMedia('(pointer: coarse)').matches || window.innerWidth < 760) ? 'touch' : 'typing'
-  const redirectTimerRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    return () => { if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current) }
-  }, [])
 
   useEffect(() => {
     if (!running || !canvasRef.current) return
@@ -207,9 +211,6 @@ export function GamePage() {
           void recordGameRef.current(req)
             .then(() => {
               setSaveStatus('saved')
-              if (source === 'due' && finalState.endReason === 'completed') {
-                redirectTimerRef.current = window.setTimeout(() => window.location.replace('/review'), 1200)
-              }
             })
             .catch((err: any) => {
               console.error('Failed to save game:', err)
@@ -246,6 +247,9 @@ export function GamePage() {
   }, [deckId, inputMode, repetitions, running, source, selectedIds, adaptiveSpeed])
 
   useBlocker(() => {
+    if (running && hud?.phase === 'playing') {
+      return !window.confirm('Bạn có chắc chắn muốn rời khỏi trận đấu? Tiến trình trận đấu hiện tại sẽ bị hủy.')
+    }
     if (hud?.phase === 'over' && saveStatus !== 'saved') {
       if (saveStatus === 'saving') return true
       return !window.confirm('Dữ liệu chưa được lưu. Nếu rời đi bạn sẽ không thể thử lưu lại và kết quả sẽ bị hủy. Bạn có chắc chắn muốn thoát?')
@@ -255,14 +259,14 @@ export function GamePage() {
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hud?.phase === 'over' && saveStatus !== 'saved') {
+      if ((running && hud?.phase === 'playing') || (hud?.phase === 'over' && saveStatus !== 'saved')) {
         e.preventDefault()
         e.returnValue = ''
       }
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hud?.phase, saveStatus])
+  }, [hud?.phase, running, saveStatus])
 
   const handleRetrySave = () => {
     if (!saveRequest) return
@@ -271,9 +275,6 @@ export function GamePage() {
     recordGameRef.current(saveRequest)
       .then(() => {
         setSaveStatus('saved')
-        if (source === 'due' && hud?.endReason === 'completed') {
-          redirectTimerRef.current = window.setTimeout(() => window.location.replace('/review'), 1200)
-        }
       })
       .catch((err: any) => {
         console.error('Failed to save game:', err)
@@ -337,7 +338,6 @@ export function GamePage() {
         return
       }
     }
-    if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current)
     setRunning(false)
     setHud(null)
     setDrillIndex(null)
@@ -512,6 +512,14 @@ export function GamePage() {
             >
               Về kết quả trận đấu
             </button>
+            {source === 'due' && (
+              <button
+                className="button secondary"
+                onClick={() => navigate('/review')}
+              >
+                Về trang Ôn tập
+              </button>
+            )}
           </div>
         </section>
       ) : (
@@ -520,6 +528,7 @@ export function GamePage() {
           accuracy={accuracy}
           saveStatus={saveStatus}
           saveError={saveError}
+          source={source}
           onDrill={() => {
             setDrillIndex(0)
             setDrillDone(false)
@@ -527,6 +536,7 @@ export function GamePage() {
             resetDrill()
           }}
           onStop={stop}
+          onGoToReview={() => navigate('/review')}
           onRetrySave={handleRetrySave}
         />
       )}
