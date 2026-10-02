@@ -432,9 +432,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })]
         })
 
-        await repository.saveCards(reviewResults.map((result) => result.card))
-        await repository.addReviews(reviewResults.map((result) => result.event))
-
         const run: GameRun = {
           id: request.runId,
           userId,
@@ -444,10 +441,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
           accuracy: request.accuracy,
           durationSeconds: request.durationSeconds,
           inputMode: request.inputMode,
-          createdAt: request.createdAt
+          createdAt: request.createdAt,
         }
-        await repository.addGameRun(run)
 
+        // Tách try/catch riêng cho từng bước đồng bộ cloud để lỗi ở một bước không làm gián đoạn các bước còn lại
+        const syncErrors: unknown[] = []
+
+        if (reviewResults.length > 0) {
+          try {
+            await repository.saveCards(reviewResults.map((result) => result.card))
+          } catch (err) {
+            console.error('Lưu srs_cards thất bại:', err)
+            syncErrors.push(err)
+          }
+
+          try {
+            await repository.addReviews(reviewResults.map((result) => result.event))
+          } catch (err) {
+            console.error('Lưu review_events thất bại:', err)
+            syncErrors.push(err)
+          }
+        }
+
+        try {
+          await repository.addGameRun(run)
+        } catch (err) {
+          console.error('Lưu game_runs thất bại:', err)
+          syncErrors.push(err)
+        }
+
+        // Luôn cập nhật local snapshot để UI phản ánh ngay kết quả của người dùng
         setSnapshot((state) => {
           if (!state) return state
 
@@ -470,6 +493,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             reviews: nextReviews,
           }
         })
+
+        if (syncErrors.length > 0) {
+          throw syncErrors[0]
+        }
       },
       async updateProfile(input) {
         if (input.ttsVoice) {

@@ -39,7 +39,7 @@ describe('seven-level memory schedule', () => {
   it('maps game completion to correct/incorrect and aggregates appearances', () => {
     expect(ratingFromGameOutcome({ vocabularyId: 'a', terminal: 'killed', responseMs: 1000, usedHint: false, hadTargetMistake: false })).toBe(true)
     expect(ratingFromGameOutcome({ vocabularyId: 'a', terminal: 'breached', responseMs: 3000, usedHint: false, hadTargetMistake: false })).toBe(false)
-    expect(ratingFromGameOutcome({ vocabularyId: 'a', terminal: 'incomplete', responseMs: 3000, usedHint: false, hadTargetMistake: false })).toBeNull()
+    expect(ratingFromGameOutcome({ vocabularyId: 'a', terminal: 'incomplete', responseMs: 3000, usedHint: false, hadTargetMistake: false })).toBe(true)
     expect(nextMemoryLevel({ memoryLevel: 7 } as never, true)).toBe(7)
     
     const incomplete = aggregateGameOutcomes([

@@ -87,8 +87,9 @@ export function scheduleReview(args: {
 }
 
 export function ratingFromGameOutcome(outcome: GameOutcome): boolean | null {
-  if (outcome.terminal === 'incomplete') return null
-  return outcome.terminal === 'killed'
+  if (outcome.terminal === 'breached') return false
+  if (outcome.terminal === 'killed' || outcome.terminal === 'incomplete') return true
+  return null
 }
 
 export function aggregateGameOutcomes(outcomes: GameOutcome[], requiredKills = 2): GameOutcome[] {
